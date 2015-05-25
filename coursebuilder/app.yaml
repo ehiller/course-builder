@@ -42,6 +42,7 @@ env_variables:
     modules.review.review
     modules.search.search
     modules.skill_map.skill_map
+    modules.teacher_dashboard.teacher_dashboard
     modules.unsubscribe.unsubscribe
     modules.upload.upload
     modules.usage_reporting.usage_reporting

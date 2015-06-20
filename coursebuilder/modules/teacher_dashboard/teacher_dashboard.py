@@ -15,6 +15,7 @@ import jinja2
 import os
 
 import appengine_config
+import teacher_entity
 
 from google.appengine.ext import db
 

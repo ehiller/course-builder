@@ -15,6 +15,7 @@ import jinja2
 import os
 
 import appengine_config
+import teacher_entity
 
 from google.appengine.ext import db
 
@@ -99,14 +100,16 @@ class BaseDashboardExtension(object):
         """
         self.handler = handler
 
-class TeacherHandler(BaseDashboardExtension, dashboard.DashboardHandler):
+class TeacherHandler(dashboard.DashboardHandler):
     ACTION = 'teacher_dashboard'
     DEFAULT_TAB = 'sections'
 
+    URL = '/modules/teacher_dashboard'
+
     XSRF_TOKEN_NAME = ''
 
-    def __init__(self, handler):
-        super(TeacherHandler, self).__init__(handler)
+    #def __init__(self, handler):
+    #    super(TeacherHandler, self).__init__(handler)
 
     @classmethod
     def register_tabs(cls):
@@ -124,6 +127,7 @@ class TeacherHandler(BaseDashboardExtension, dashboard.DashboardHandler):
 
         register_tab('sections', 'Sections', TeacherHandler)
         register_tab('student', 'Student Profile', TeacherHandler)
+        register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
 
         # skill_map_visualization = analytics.Visualization(
         #     'skill_map',
@@ -133,57 +137,73 @@ class TeacherHandler(BaseDashboardExtension, dashboard.DashboardHandler):
         # tabs.Registry.register('analytics', 'skill_map', 'Skill Map',
         #                        [skill_map_visualization])
 
-    def render(self, template_values, in_action=None, in_tab=None):
-        pass
-        #main_content = self.get_template(
-        #    'teacher_dashboard.html', [TEMPLATES_DIR]).render(template_values)
-
-        #self.render_page({
-        #    'page_title': self.format_title('Teacher Dashboard'),
-        #    'main_content': jinja2.utils.Markup(main_content),
-        #    })
-
-    @classmethod
-    def display_html(cls, handler):
-        in_tab = handler.request.get('tab') or cls.DEFAULT_TAB
+    def get_teacher_dashboard(self):
+        in_tab = self.request.get('tab') or self.DEFAULT_TAB
 
         if in_tab == 'sections':
-            return cls.get_sections()
+            return self.get_sections()
         elif in_tab == 'student':
-            return cls.get_student()
+            return self.get_student()
+        elif in_tab =='teacher_reg':
+            return self.get_teacher_reg()
 
-    @classmethod
-    def get_sections(cls, ):
-        template_values = {}
-        template_values['main_content'] = 'Course Section Content'
+    def get_sections(self):
+        main_content = 'Course Section Content'
 
-        return template_values['main_content']
+        self.render_page({
+            'page_title': self.format_title('Sections'),
+            'main_content': jinja2.utils.Markup(main_content)})
 
-    @classmethod
-    def get_student(cls):
+    def get_student(self):
         template_values = {}
         template_values['main_content'] = 'Student Dashboard Content'
 
         return template_values['main_content']
 
+    def get_teacher_reg(self):
+        template_values = {}
+        template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+        main_content = self.get_template(
+            'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
+
+        self.render_page({
+            'page_title': self.format_title('Teacher Registration'),
+            'main_content': jinja2.utils.Markup(main_content)})
+
+    def post_teacher_reg(self):
+        template_values = []
+        template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+        main_content = self.get_template(
+            'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
+
+        self.render_page({
+            'page_title': self.format_title('Teacher Dashboard'),
+            'main_content': jinja2.utils.Markup(main_content)
+            },
+            'teacher_dashboard',
+            'teacher_reg'
+        )
 
 #Not needed as far as I know, at least, until we run into a scenario where we might need to define roles specific to
 # this module (can edit students maybe, something like that)
 # def permissions_callback(app_context):
 #     return [
-#             roles.Permission(ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_SETTINGS_PERMISSION, ACCESS_SETTINGS_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_ROLES_PERMISSION, ACCESS_ROLES_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_ANALYTICS_PERMISSION, ACCESS_ANALYTICS_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_SEARCH_PERMISSION, ACCESS_SEARCH_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_PEERREVIEW_PERMISSION, ACCESS_PEERREVIEW_PERMISSION_DESCRIPTION),
-#             roles.Permission(ACCESS_SKILLMAP_PERMISSION, ACCESS_SKILLMAP_PERMISSION_DESCRIPTION),
+#             roles.Permission(ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)
 #         ]
 
 def notify_module_enabled():
+    def get_action(handler):
+        handler.redirect('/modules/teacher_dashboard?action=teacher_dashboard&tab=%s' % handler.request.get('tab') or
+                         TeacherHandler.DEFAULT_TAB)
 
     dashboard.DashboardHandler.add_nav_mapping(
         TeacherHandler.ACTION, 'Teacher')
+
+    dashboard.DashboardHandler.get_actions.append('teacher_dashboard')
+    setattr(dashboard.DashboardHandler, 'get_teacher_dashboard', get_action)
+
+    #add post actions
+    dashboard.DashboardHandler.add_custom_post_action('teacher_reg', TeacherHandler.post_teacher_reg)
 
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)
@@ -212,7 +232,7 @@ def notify_module_enabled():
     #courses.ADDITIONAL_ENTITIES_FOR_COURSE_IMPORT.add(I18nProgressEntity)
 
     #register handlers (register is in BaseDashboardExtension)
-    TeacherHandler.register()
+    #TeacherHandler.register()
 
     #hooks would go here, none needed for a basic module. yet....
 
@@ -224,12 +244,9 @@ def register_module():
         (os.path.join(RESOURCES_PATH, 'js', '.*'), tags.JQueryHandler),
         (os.path.join(RESOURCES_PATH, '.*'), tags.ResourcesHandler)
        ]
+
     namespaced_routes = [
-        #(TranslationConsoleRestHandler.URL, TranslationConsoleRestHandler),
-        #(TranslationDeletionRestHandler.URL, TranslationDeletionRestHandler),
-        #(TranslationDownloadRestHandler.URL, TranslationDownloadRestHandler),
-        #(TranslationUploadRestHandler.URL, TranslationUploadRestHandler),
-        #(IsTranslatableRestHandler.URL, IsTranslatableRestHandler)
+         (TeacherHandler.URL, TeacherHandler)
         ]
 
     global custom_module  # pylint: disable=global-statement

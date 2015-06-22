@@ -1,10 +1,11 @@
 '''Create a teacher's entity'''
+from google.appengine.ext import db
+from models import entities
+from models.models import MemcacheManager
 
 __author__ = 'barok.imana@trincoll.edu'
 
-from models import entities
-
-class Teacher(BaseEntity):
+class Teacher(entities.BaseEntity):
     """Teacher data specific to a course instance, modeled after the student Entity"""
     enrolled_on = db.DateTimeProperty(auto_now_add=True, indexed=True)
     user_id = db.StringProperty(indexed=True)
@@ -102,7 +103,7 @@ class Teacher(BaseEntity):
             else:
                 MemcacheManager.set(cls._memcache_key(email), NO_OBJECT)
         if teacher and teacher.is_enrolled:
-            return teahcer
+            return teacher
         else:
             return None
 

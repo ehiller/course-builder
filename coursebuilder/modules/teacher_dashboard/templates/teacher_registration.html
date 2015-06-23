@@ -1,4 +1,11 @@
 <div>
+    {% if error_message %}
+        <h2>Errors</h2>
+        {{ error_message }}
+        <br />
+        <br />
+    {% endif %}
+
     <form action="/sample/modules/teacher_dashboard?action=teacher_reg&tab=teacher_reg" method='post'>
         <input type="hidden" name="action" value="teacher_reg" />
         <input type="hidden" name="xsrf_token" value="{{ teacher_reg_xsrf_token|escape }}">
@@ -6,11 +13,10 @@
         Name: <input type="text" name="firstname" value="first name">
         <input type="text" name="lastname" value="last name"><br>
 
-        Primary Email: <input type="text" name="Primary Email" size="35"><br><br>
+        Primary Email: <input type="text" name="email" size="35"><br><br>
 
-        School: <input type="text" name="School Name"><br>
+        School: <input type="text" name="school"><br>
 
         <input type="submit" />
-
     </form>
 </div>

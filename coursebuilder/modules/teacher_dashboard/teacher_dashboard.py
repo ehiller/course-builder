@@ -171,18 +171,41 @@ class TeacherHandler(dashboard.DashboardHandler):
             'main_content': jinja2.utils.Markup(main_content)})
 
     def post_teacher_reg(self):
-        template_values = []
-        template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
-        main_content = self.get_template(
-            'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
+        email = self.request.get('email')
+        school = self.request.get('school')
 
-        self.render_page({
-            'page_title': self.format_title('Teacher Dashboard'),
-            'main_content': jinja2.utils.Markup(main_content)
-            },
-            'teacher_dashboard',
-            'teacher_reg'
-        )
+        #ehiller - check if the teacher already exists
+        teacher = teacher_entity.Teacher.get_by_email(email)
+
+        if teacher:
+            template_values = {}
+            template_values['error_message'] = 'Teacher already registered'
+            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+            main_content = self.get_template(
+                'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
+
+            self.render_page({
+                'page_title': self.format_title('Teacher Dashboard'),
+                'main_content': jinja2.utils.Markup(main_content)
+                },
+                'teacher_dashboard',
+                'teacher_reg'
+            )
+        else:
+            teacher_entity.Teacher.add_new_teacher_for_user(email, school, '')
+
+            template_values = {}
+            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+            main_content = self.get_template(
+                'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
+
+            self.render_page({
+                'page_title': self.format_title('Teacher Dashboard'),
+                'main_content': jinja2.utils.Markup(main_content)
+                },
+                'teacher_dashboard',
+                'teacher_reg'
+            )
 
 #Not needed as far as I know, at least, until we run into a scenario where we might need to define roles specific to
 # this module (can edit students maybe, something like that)

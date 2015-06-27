@@ -128,6 +128,7 @@ class TeacherHandler(dashboard.DashboardHandler):
         register_tab('sections', 'Sections', TeacherHandler)
         register_tab('student', 'Student Profile', TeacherHandler)
         register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
+        register_tab('course_reg', 'Create Section', TeacherHandler)
 
         # skill_map_visualization = analytics.Visualization(
         #     'skill_map',
@@ -144,8 +145,10 @@ class TeacherHandler(dashboard.DashboardHandler):
             return self.get_sections()
         elif in_tab == 'student':
             return self.get_student()
-        elif in_tab =='teacher_reg':
+        elif in_tab == 'teacher_reg':
             return self.get_teacher_reg()
+        elif in_tab == 'course_reg':
+            return self.get_course_reg()
 
     def get_sections(self):
         main_content = 'Course Section Content'
@@ -170,6 +173,16 @@ class TeacherHandler(dashboard.DashboardHandler):
             'page_title': self.format_title('Teacher Registration'),
             'main_content': jinja2.utils.Markup(main_content)})
 
+    def get_course_reg(self):
+        template_values = {}
+        template_values['course_section_reg_xsrf_token'] = self.create_xsrf_token('course_section_reg')
+        main_content = self.get_template(
+            'course_section_registration.html', [TEMPLATES_DIR]).render(template_values)
+
+        self.render_page({
+            'page_title': self.format_title('Section Registration'),
+            'main_content': jinja2.utils.Markup(main_content)})
+
     def post_teacher_reg(self):
         email = self.request.get('email')
         school = self.request.get('school')
@@ -177,35 +190,54 @@ class TeacherHandler(dashboard.DashboardHandler):
         #ehiller - check if the teacher already exists
         teacher = teacher_entity.Teacher.get_by_email(email)
 
+        template_values = {}
+        template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+
         if teacher:
-            template_values = {}
             template_values['error_message'] = 'Teacher already registered'
-            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
-            self.render_page({
-                'page_title': self.format_title('Teacher Dashboard'),
-                'main_content': jinja2.utils.Markup(main_content)
-                },
-                'teacher_dashboard',
-                'teacher_reg'
-            )
         else:
             teacher_entity.Teacher.add_new_teacher_for_user(email, school, '')
 
-            template_values = {}
-            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
-            self.render_page({
-                'page_title': self.format_title('Teacher Dashboard'),
-                'main_content': jinja2.utils.Markup(main_content)
-                },
-                'teacher_dashboard',
-                'teacher_reg'
-            )
+        self.render_page({
+            'page_title': self.format_title('Teacher Dashboard'),
+            'main_content': jinja2.utils.Markup(main_content)
+            },
+            'teacher_dashboard',
+            'teacher_reg'
+        )
+
+    def post_course_registration(self):
+        template_values = {}
+        template_values['course_section_reg_xsrf_token'] = self.create_xsrf_token('course_section_reg')
+
+        course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
+        section_id = self.request.get('section_id')
+        found_match = False
+
+        for course_section in course_sections:
+            if section_id == course_section.section_id:
+                template_values['error_message'] = 'Unable to create course section. Section already exists.'
+                found_match = True
+
+
+
+        main_content = self.get_template(
+            'course_section_registration.html', [TEMPLATES_DIR]).render(template_values)
+        template_values['main_content'] = main_content
+
+        self.render_page({
+            'page_title': self.format_title('Teacher Dashboard'),
+            'main_content': jinja2.utils.Markup(main_content)
+            },
+            'teacher_dashboard',
+            'course_reg'
+        )
 
 #Not needed as far as I know, at least, until we run into a scenario where we might need to define roles specific to
 # this module (can edit students maybe, something like that)
@@ -227,6 +259,7 @@ def notify_module_enabled():
 
     #add post actions
     dashboard.DashboardHandler.add_custom_post_action('teacher_reg', TeacherHandler.post_teacher_reg)
+    dashboard.DashboardHandler.add_custom_post_action('course_section_reg', TeacherHandler.post_course_registration)
 
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)

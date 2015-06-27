@@ -2,16 +2,21 @@
 
 __author__ = 'barok.imana@trincoll.edu'
 
+
 from models import entities
-from google.appengine.ext import db
 from models import models
-import appengine_config
-from google.appengine.api import namespace_manager
 from models import transforms
-import logging
-from common import utils as common_utils
-import datetime
+
+from google.appengine.ext import db
+from google.appengine.api import namespace_manager
 from google.appengine.api import users
+
+import appengine_config
+import logging
+import datetime
+import json
+
+from common import utils as common_utils
 
 
 # We want to use memcache for both objects that exist and do not exist in the
@@ -378,58 +383,6 @@ class TeacherProfileDAO(object):
 
         return teacher
 
-    # ehiller - will add later if needed
-    # @classmethod
-    # def get_enrolled_teacher_by_email_for(cls, email, app_context):
-    #     """Returns teacher for a specific course."""
-    #     old_namespace = namespace_manager.get_namespace()
-    #     try:
-    #         namespace_manager.set_namespace(app_context.get_namespace_name())
-    #         return Teacher.get_enrolled_student_by_email(email)
-    #     finally:
-    #         namespace_manager.set_namespace(old_namespace)
-
-    # @classmethod
-    # def update(
-    #         cls, user_id, email, legal_name=None, nick_name=None,
-    #         date_of_birth=None, is_enrolled=None, final_grade=None,
-    #         course_info=None, labels=None, profile_only=False):
-    #     profile, student = cls._update_in_txn(
-    #         user_id, email, legal_name, nick_name, date_of_birth, is_enrolled,
-    #         final_grade, course_info, labels, profile_only)
-    #     common_utils.run_hooks(
-    #         cls.UPDATE_POST_HOOKS, profile, student, user_id, email,
-    #         legal_name, nick_name, date_of_birth, is_enrolled,
-    #         final_grade, course_info, labels, profile_only)
-    #
-    # @classmethod
-    # @db.transactional(xg=True)
-    # def _update_in_txn(
-    #         cls, user_id, email, legal_name=None, nick_name=None,
-    #         date_of_birth=None, is_enrolled=None, final_grade=None,
-    #         course_info=None, labels=None, profile_only=False):
-    #     """Updates a student and/or their global profile."""
-    #     student = None
-    #     if not profile_only:
-    #         student = Teacher.get_by_email(email)
-    #         if not student:
-    #             raise Exception('Unable to find student for: %s' % user_id)
-    #
-    #     profile = cls._get_profile_by_user_id(user_id)
-    #     if not profile:
-    #         profile = cls.add_new_profile(user_id, email)
-    #
-    #     cls._update_attributes(
-    #         profile, student, email=email, legal_name=legal_name,
-    #         nick_name=nick_name, date_of_birth=date_of_birth,
-    #         is_enrolled=is_enrolled, final_grade=final_grade,
-    #         course_info=course_info, labels=labels)
-    #
-    #     cls._put_profile(profile)
-    #     if not profile_only:
-    #         student.put()
-    #
-    #     return profile, student
 
 class CourseSectionEntity(object):
 
@@ -440,6 +393,14 @@ class CourseSectionEntity(object):
     section_description = ""
     students = ""
     is_active = False
+
+    def __init__(self, course_section_decoded):
+        self.created_datetime = course_section_decoded['created_datetime']
+        self.section_id = course_section_decoded['section_id']
+        self.section_name = course_section_decoded['section_name']
+        self.section_description = course_section_decoded['section_description']
+        self.students = course_section_decoded['students']
+        self.is_active = course_section_decoded['is_active']
 
     #ehiller - need ability to translate JSON data to CourseSectionEntity
     def transform_course_data(self):
@@ -465,3 +426,26 @@ class CourseSectionEntity(object):
 
         #add new section to list of sections passed in. this should add it by reference and set the collection
         course_sections[section_id] = course_section
+
+    @classmethod
+    def get_course_sections_for_user(cls):
+        user = users.get_current_user()
+
+        if not user:
+            return None
+
+        teacher = Teacher.get_by_email(user.email)
+
+        if not teacher:
+            return None
+
+        course_sections = []
+
+        course_sections_decoded = json.loads(teacher.sections)
+
+        for course_section_decoded in course_sections_decoded:
+            course_section = CourseSectionEntity(course_section_decoded)
+            course_sections.append(course_section)
+
+        return course_sections
+

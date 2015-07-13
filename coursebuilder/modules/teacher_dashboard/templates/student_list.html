@@ -1,11 +1,11 @@
-<link rel="stylesheet" href="../resources/css/student_list.css" type="text/css">
+<link rel="stylesheet" href="../resources/css/view.css" type="text/css">
 
 <div name="student_list" id="student_list">
     <form action="/sample/modules/teacher_dashboard?action=student_list&tab=student_list" method='post'>
         <input type="hidden" name="action" value="student_list" />
         <input type="hidden" name="xsrf_token" value="{{ student_list_xsrf_token|escape }}">
 
-        <div class="header" name="student_list_header">
+        <div class="sl-header" name="student_list_header">
             <div>
                 <label>Course Name:</label>
                 <label>Course Name Here</label>
@@ -28,7 +28,7 @@
             </div>
         </div>
 
-        <div id="right">
+        <div id="sl-right">
             <table class="student-list-table" name="student_list_table">
                 <thead>
                     <tr>
@@ -48,7 +48,7 @@
             </table>
         </div>
 
-        <div class="footer">
+        <div class="sl-footer">
             <input type="submit" name="student_list_save_btn" value="Save" />
             <input type="submit" name="student_list_cancel_btn" value="Cancel" />
             <input type="submit" name="student_list_exit_btn" value="Exit" />

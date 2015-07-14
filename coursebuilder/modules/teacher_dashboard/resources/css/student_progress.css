@@ -1,0 +1,181 @@
+/* This code was copied from course_overview.css and needs to be stripped of unnecessary code */
+
+div.student-progress {
+  border: solid #ccc 1px;
+}
+div.student-progress a {
+  text-decoration: none;
+  color: #0000ee;
+}
+div.student-progress div.header {
+  background-color: #aaa;
+  text-align: center;
+  font-weight: bold;
+}
+div.student-progress div.header.left-matter {
+  float:left;
+}
+div.student-progress div.row > div.header {
+  display: block;
+}
+div.student-progress ol.course,
+div.student-progress ol.unit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ol.sl-student {
+  list-style-type: none;
+  list-style-image: none;
+  list-style-position: outside;
+}
+div.student-progress ol.course > li.ui-sortable-helper > ol.unit > li {
+  /* Hide the contents of a unit while it's moving */
+  height: 0;
+  overflow-y: hidden;
+  transition: height 300ms;
+}
+div.student-progress ol.unit > li {
+  height: 28px;
+}
+div.student-progress .placeholder {
+  border: solid #ffffc0 1px;
+  background-color: #f8f8f0;
+  height: 28px;
+  line-height: 1.2em;
+}
+div.student-progress li {
+  margin: 0 !important;
+  padding: 0;
+}
+div.student-progress div.row {
+  transition: background-color 200ms;
+  height: 28px;
+  white-space: nowrap;
+  overflow-x: hidden;
+  position: relative;
+}
+div.student-progress div.row > div > div {
+  vertical-align: top;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  line-height: 24px;
+}
+div.student-progress div.row.even {
+  background-color: #f0f0f0;
+}
+div.student-progress div.row:hover {
+  background-color: #e0e0e0;
+}
+div.student-progress div.left-matter {
+  display: inline-block;
+  width: 580px;
+  border-right: solid #ccc 1px;
+}
+div.student-progress div.row.course > div > div.name {
+  margin-left: 5px;
+}
+div.student-progress div.row.custom-unit > div > div.name {
+  font-weight: bold;
+}
+div.student-progress div.row.lesson > div > div.name,
+div.student-progress div.row.pre-assessment > div > div.name,
+div.student-progress div.row.post-assessment > div > div.name,
+div.student-progress div.row.add-lesson > div > div.name {
+  margin-left: 20px;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+}
+div.student-progress.read-only div.row:hover div.reorder,
+div.student-progress div.row.pre-assessment > div > div.reorder,
+div.student-progress div.row.post-assessment > div > div.reorder,
+div.student-progress div.row.add-lesson > div > div.reorder {
+  opacity: 0;
+  cursor: inherit;
+}
+div.student-progress button {
+  background-color: inherit;
+  border: none;
+  line-height: 24px;
+  padding: 0;
+}
+div.student-progress div.row.add-lesson button {
+  font-style: italic;
+  color: #777;
+  margin-left: 20px;
+}
+div.student-progress div.row > div,
+div.student-progress div.row > div > div {
+  display: inline-block;
+}
+div.student-progress .reveal-on-hover {
+  opacity: 0;
+  transition: opacity 200ms;
+}
+div.student-progress div.row:hover .reveal-on-hover,
+div.student-progress .reveal-on-hover.md-lock {
+  opacity: 1;
+}
+div.student-progress .icon {
+  display: inline-block;
+  vertical-align: top;
+  font-size: 16px;
+  margin: 0;
+  height: 24px;
+  width: 20px;
+  line-height: 24px;
+  padding: 2px 4px 2px 0;
+  color: #555;
+  text-decoration: none;
+}
+div.student-progress div.reorder {
+  margin-left: 6px;
+  cursor: move;
+}
+div.student-progress div.extras {
+  padding-right: 20px;
+}
+
+/* This styles the progress bars on the page */
+progress[value] {
+  width: 250px;
+  height: 20px;
+
+  /* Reset the default appearance */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+
+  /*Get rid of default border in Firefox */
+  border: none;
+
+  /* For IE10 */
+  color: #eee;
+}
+progress[value]::-webkit-progress-bar {
+  background-color: #eee;
+  border-radius: 2px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+}
+
+/* For browsers that do not support the progress tag */
+.progress-bar {
+  background-color: whiteSmoke;
+  border-radius: 2px;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25) inset;
+
+  width: 250px;
+  height: 250px;
+
+  position: relative;
+  display: block;
+}
+.progress-bar > span {
+  background-color: #eee;
+  border-radius: 2px;
+  display: block;
+  text-indent: -9999px;
+}
+/* End of progress bar style */

@@ -1,5 +1,23 @@
 __author__ = 'echicheko@css.edu'
 
+from models.models import Student
+from models.models import MemcacheManager
+from models.models import LabelDAO
+from models.models import PersonalProfile
+from models.models import PersonalProfileDTO
+from models import transforms
+
+from common import utils as common_utils
+
+from google.appengine.api import namespace_manager
+from google.appengine.ext import db
+from google.appengine.api import users
+
+import appengine_config
+
+import logging
+
+NO_OBJECT = {}
 
 class Teacher(Student):
     enrolled_on = db.DateTimeProperty(auto_now_add=True, indexed=True)
@@ -200,20 +218,20 @@ class TeacherProfileDAO(object):
     @classmethod
     def _add_new_profile(cls, user_id, email):
         """Adds new profile for a user_id and returns Entity object."""
-        if not CAN_SHARE_STUDENT_PROFILE.value:
-            return None
+        #if not CAN_SHARE_STUDENT_PROFILE.value:
+         #   return None
 
-    old_namespace = namespace_manager.get_namespace()
-    try:
-        namespace_manager.set_namespace(cls.TARGET_NAMESPACE)
+        old_namespace = namespace_manager.get_namespace()
+        try:
+            namespace_manager.set_namespace(cls.TARGET_NAMESPACE)
 
-        profile = PersonalProfile(key_name=user_id)
-        profile.email = email
-        profile.enrollment_info = '{}'
-        profile.put()
-        return profile
-    finally:
-        namespace_manager.set_namespace(old_namespace)
+            profile = PersonalProfile(key_name=user_id)
+            profile.email = email
+            profile.enrollment_info = '{}'
+            profile.put()
+            return profile
+        finally:
+            namespace_manager.set_namespace(old_namespace)
 
 
     @classmethod
@@ -369,9 +387,9 @@ class TeacherProfileDAO(object):
             student = Student(key_name=email)
 
         # update profile
-        cls._update_attributes(
-            profile, teacher, nick_name=nick_name, is_enrolled=True,
-            labels=labels)
+        #cls._update_attributes(
+        #    profile, teacher, nick_name=nick_name, is_enrolled=True,
+        #    labels=labels)
 
         # update student
         student.user_id = user_id
@@ -382,69 +400,6 @@ class TeacherProfileDAO(object):
         student.put()
 
         return student
-
-    @classmethod
-    def _send_welcome_notification(cls, handler, teacher):
-        if not cls._can_send_welcome_notifications(handler):
-            return
-
-        if services.unsubscribe.has_unsubscribed(teacher.email):
-            return
-
-        course_settings = handler.app_context.get_environ()['course']
-        course_title = course_settings['title']
-        sender = cls._get_welcome_notifications_sender(handler)
-
-        assert sender, 'Must set welcome_notifications_sender in course.yaml'
-
-        context = {
-            'student_name': student.name,
-            'course_title': course_title,
-            'course_url': handler.get_base_href(handler),
-            'unsubscribe_url': services.unsubscribe.get_unsubscribe_url(
-                handler, student.email)
-        }
-
-        if course_settings.get('welcome_notifications_subject'):
-            subject = jinja2.Template(unicode(
-                course_settings['welcome_notifications_subject']
-            )).render(context)
-        else:
-            subject = 'Welcome to ' + course_title
-
-        if course_settings.get('welcome_notifications_body'):
-            body = jinja2.Template(unicode(
-                course_settings['welcome_notifications_body']
-            )).render(context)
-        else:
-            jinja_environment = handler.app_context.fs.get_jinja_environ(
-                [os.path.join(
-                    appengine_config.BUNDLE_ROOT, 'views', 'notifications')],
-                autoescape=False)
-            body = jinja_environment.get_template('welcome.txt').render(context)
-
-        services.notifications.send_async(
-            student.email, sender, WELCOME_NOTIFICATION_INTENT,
-            body, subject, audit_trail=context,
-        )
-
-    @classmethod
-    def _can_send_welcome_notifications(cls, handler):
-        return (
-            services.notifications.enabled() and services.unsubscribe.enabled()
-            and cls._get_send_welcome_notifications(handler))
-
-    @classmethod
-    def _get_send_welcome_notifications(cls, handler):
-        return handler.app_context.get_environ().get(
-            'course', {}
-        ).get('send_welcome_notifications', False)
-
-    @classmethod
-    def _get_welcome_notifications_sender(cls, handler):
-        return handler.app_context.get_environ().get(
-            'course', {}
-        ).get('welcome_notifications_sender')
 
     @classmethod
     def get_enrolled_teacher_by_email_for(cls, email, app_context):
@@ -473,7 +428,7 @@ class TeacherProfileDAO(object):
     @db.transactional(xg=True)
     def _update_in_txn(
             cls, user_id, email, legal_name=None, nick_name=None,
-            date_of_birth=None, is_enrolled=None, final_grade=final_grade,
+            date_of_birth=None, is_enrolled=None, final_grade=None,
             course_info=None, labels=None, profile_only=False):
         """Updates a teacher and/or their global profile."""
         student = None

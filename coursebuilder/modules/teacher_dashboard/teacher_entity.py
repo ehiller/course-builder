@@ -3,8 +3,14 @@
 __author__ = 'barok.imana@trincoll.edu'
 
 
-from models import entities
-from models import models
+from models.entities import BaseEntity
+
+from models.models import MemcacheManager
+from models.models import PersonalProfile
+from models.models import PersonalProfileDTO
+from models.models import Student
+from models.models import BaseJsonDao
+
 from models import transforms
 
 from google.appengine.ext import db
@@ -15,6 +21,7 @@ import appengine_config
 import logging
 import datetime
 import json
+from json import JSONEncoder
 
 from common import utils as common_utils
 
@@ -24,7 +31,7 @@ from common import utils as common_utils
 # we cache this object below.
 NO_OBJECT = {}
 
-class Teacher(entities.BaseEntity):
+class Teacher(BaseEntity):
     """Teacher data specific to a course instance, modeled after the student Entity"""
     enrolled_on = db.DateTimeProperty(auto_now_add=True, indexed=True)
     user_id = db.StringProperty(indexed=True)
@@ -33,7 +40,7 @@ class Teacher(entities.BaseEntity):
     is_enrolled = db.BooleanProperty(indexed=False)
 
     # Additional field for teachers
-    sections = db.StringProperty(indexed=False)
+    sections = db.TextProperty(indexed=False)
     school = db.StringProperty(indexed=False)
     email = db.StringProperty(indexed=False)
 
@@ -61,15 +68,6 @@ class Teacher(entities.BaseEntity):
         model.key_by_user_id = self.get_key(transform_fn=transform_fn)
         return model
 
-    @property
-    def email(self):
-        return self.key().name()
-
-    # additional method for Teacher's entity
-    @property
-    def sections(self):
-        return
-
     @classmethod
     def _memcache_key(cls, key):
         """Makes a memcache key from primary key."""
@@ -83,13 +81,13 @@ class Teacher(entities.BaseEntity):
     def put(self):
         """Do the normal put() and also add the object to memcache."""
         result = super(Teacher, self).put()
-        models.MemcacheManager.set(self._memcache_key(self.key().name()), self)
+        MemcacheManager.set(self._memcache_key(self.key().name()), self)
         return result
 
     def delete(self):
         """Do the normal delete() and also remove the object from memcache."""
         super(Teacher, self).delete()
-        models.MemcacheManager.delete(self._memcache_key(self.key().name()))
+        MemcacheManager.delete(self._memcache_key(self.key().name()))
 
     @classmethod
     def add_new_teacher_for_user(
@@ -101,7 +99,7 @@ class Teacher(entities.BaseEntity):
         return Teacher.get_by_key_name(email.encode('utf8'))
 
     @classmethod
-    def get_student_by_user_id(cls):
+    def get_teacher_by_user_id(cls):
         """Loads user and student and asserts both are present."""
         user = users.get_current_user()
         if not user:
@@ -113,20 +111,28 @@ class Teacher(entities.BaseEntity):
         return teacher
 
     @classmethod
+    def get_teacher_by_user_id(cls, user_id):
+        teachers = cls.all().filter(cls.user_id.name, user_id).fetch(limit=2)
+        if len(teachers) == 2:
+            raise Exception(
+                'There is more than one teacher with user_id %s' % user_id)
+        return teachers[0] if teachers else None
+
+    @classmethod
     def get_teacher_by_email(cls, email):
         """Returns enrolled teacher or None."""
         # ehiller - not sure if memcache check is in the right place, feel like we might want to do that after
         # checking datastore. this depends on what memcachemanager returns if a teacher hasn't been set there yet but
         #  still actually exists.
-        teacher = models.MemcacheManager.get(cls._memcache_key(email))
+        teacher = MemcacheManager.get(cls._memcache_key(email))
         if NO_OBJECT == teacher:
             return None
         if not teacher:
             teacher = Teacher.get_by_email(email)
             if teacher:
-                models.MemcacheManager.set(cls._memcache_key(email), teacher)
+                MemcacheManager.set(cls._memcache_key(email), teacher)
             else:
-                models.MemcacheManager.set(cls._memcache_key(email), NO_OBJECT)
+                MemcacheManager.set(cls._memcache_key(email), NO_OBJECT)
         if teacher: #ehiller - removed isEnrolled check, don't think we still need a teacher to be
         # enrolled to get their data back
             return teacher
@@ -139,14 +145,6 @@ class Teacher(entities.BaseEntity):
             raise Exception('Teacher instance has no user_id set.')
         user_id = transform_fn(self.user_id) if transform_fn else self.user_id
         return db.Key.from_path(Teacher.kind(), user_id)
-
-    @classmethod
-    def get_teacher_by_user_id(cls, user_id):
-        teachers = cls.all().filter(cls.user_id.name, user_id).fetch(limit=2)
-        if len(teachers) == 2:
-            raise Exception(
-                'There is more than one teacher with user_id %s' % user_id)
-        return teachers[0] if teachers else None
 
     def has_same_key_as(self, key):
         """Checks if the key of the teacher and the given key are equal."""
@@ -181,150 +179,6 @@ class TeacherProfileDAO(object):
         """Makes a memcache key from primary key."""
         return 'entity:personal-profile:%s' % key
 
-    @classmethod
-    def _get_profile_by_user_id(cls, user_id):
-        """Loads profile given a user_id and returns Entity object."""
-        old_namespace = namespace_manager.get_namespace()
-        try:
-            namespace_manager.set_namespace(cls.TARGET_NAMESPACE)
-
-            profile = models.MemcacheManager.get(
-                cls._memcache_key(user_id), namespace=cls.TARGET_NAMESPACE)
-            if profile == NO_OBJECT:
-                return None
-            if profile:
-                return profile
-            profile = models.PersonalProfile.get_by_key_name(user_id)
-            models.MemcacheManager.set(
-                cls._memcache_key(user_id), profile if profile else NO_OBJECT,
-                namespace=cls.TARGET_NAMESPACE)
-            return profile
-        finally:
-            namespace_manager.set_namespace(old_namespace)
-
-    @classmethod
-    def _add_new_profile(cls, user_id, email):
-        """Adds new profile for a user_id and returns Entity object."""
-        #ehiller - if for some reason we can't share student profile, I don't think a teacher would care, we probably
-        # don't even need this function
-        #if not CAN_SHARE_STUDENT_PROFILE.value:
-        #    return None
-
-        old_namespace = namespace_manager.get_namespace()
-        try:
-            namespace_manager.set_namespace(cls.TARGET_NAMESPACE)
-
-            profile = models.PersonalProfile(key_name=user_id)
-            profile.email = email
-            profile.enrollment_info = '{}'
-            profile.put()
-            return profile
-        finally:
-            namespace_manager.set_namespace(old_namespace)
-
-    @classmethod
-    def _update_global_profile_attributes(
-            cls, profile,
-            email=None, legal_name=None, nick_name=None,
-            date_of_birth=None, is_enrolled=None, final_grade=None,
-            course_info=None):
-        """Modifies various attributes of Student's Global Profile."""
-        # TODO(psimakov): update of email does not work for student
-        if email is not None:
-            profile.email = email
-
-        if legal_name is not None:
-            profile.legal_name = legal_name
-
-        if nick_name is not None:
-            profile.nick_name = nick_name
-
-        if date_of_birth is not None:
-            profile.date_of_birth = date_of_birth
-
-        if not (is_enrolled is None and final_grade is None and
-                        course_info is None):
-
-            # Defer to avoid circular import.
-            from controllers import sites
-            course = sites.get_course_for_current_request()
-            course_namespace = course.get_namespace_name()
-
-            if is_enrolled is not None:
-                enrollment_dict = transforms.loads(profile.enrollment_info)
-                enrollment_dict[course_namespace] = is_enrolled
-                profile.enrollment_info = transforms.dumps(enrollment_dict)
-
-            if final_grade is not None or course_info is not None:
-                course_info_dict = {}
-                if profile.course_info:
-                    course_info_dict = transforms.loads(profile.course_info)
-                if course_namespace in course_info_dict.keys():
-                    info = course_info_dict[course_namespace]
-                else:
-                    info = {}
-                if final_grade:
-                    info['final_grade'] = final_grade
-                if course_info:
-                    info['info'] = course_info
-                course_info_dict[course_namespace] = info
-                profile.course_info = transforms.dumps(course_info_dict)
-
-    @classmethod
-    def _update_course_profile_attributes(
-            cls, teacher, nick_name=None, is_enrolled=None, labels=None, sections=None):
-        """Modifies various attributes of Student's Course Profile."""
-
-        if nick_name is not None:
-            teacher.name = nick_name
-
-        if is_enrolled is not None:
-            teacher.is_enrolled = is_enrolled
-
-        if labels is not None:
-            teacher.labels = labels
-
-        if sections is not None:
-            teacher.sections = sections
-
-    @classmethod
-    def _update_attributes(
-            cls, profile, teacher,
-            email=None, legal_name=None, nick_name=None,
-            date_of_birth=None, is_enrolled=None, final_grade=None,
-            course_info=None, labels=None, sections=None):
-        """Modifies various attributes of Teacher and Profile."""
-
-        if profile:
-            cls._update_global_profile_attributes(
-                profile, email=email, legal_name=legal_name,
-                nick_name=nick_name, date_of_birth=date_of_birth,
-                is_enrolled=is_enrolled, final_grade=final_grade,
-                course_info=course_info)
-
-        if teacher:
-            cls._update_course_profile_attributes(
-                teacher, nick_name=nick_name, is_enrolled=is_enrolled,
-                labels=labels, sections=sections)
-
-    @classmethod
-    def _put_profile(cls, profile):
-        """Does a put() on profile objects."""
-        if not profile:
-            return
-        profile.put()
-        models.MemcacheManager.delete(
-            cls._memcache_key(profile.user_id),
-            namespace=cls.TARGET_NAMESPACE)
-
-    @classmethod
-    def get_profile_by_user_id(cls, user_id):
-        """Loads profile given a user_id and returns DTO object."""
-        profile = cls._get_profile_by_user_id(user_id)
-        if profile:
-            return models.PersonalProfileDTO(personal_profile=profile)
-        return None
-
     # This method is going to largely depend on how we plan to register
     # users as teachers
 
@@ -332,13 +186,12 @@ class TeacherProfileDAO(object):
     def add_new_teacher_for_user(
             cls, email,  school, additional_fields):
 
-        student_by_email = models.Student.get_by_email(email)
+        student_by_email = Student.get_by_email(email)
 
         teacher = cls._add_new_teacher_for_user(
             student_by_email.user_id, email, student_by_email.name, school, additional_fields)
 
         return teacher
-
 
     @classmethod
     def _add_new_teacher_for_user(
@@ -393,39 +246,104 @@ class CourseSectionEntity(object):
     section_description = ""
     students = ""
     is_active = False
+    section_year = ""
 
-    def __init__(self, course_section_decoded):
-        self.created_datetime = course_section_decoded['created_datetime']
-        self.section_id = course_section_decoded['section_id']
-        self.section_name = course_section_decoded['section_name']
-        self.section_description = course_section_decoded['section_description']
-        self.students = course_section_decoded['students']
-        self.is_active = course_section_decoded['is_active']
+    def __init__(self, course_section_decoded = None):
+        if course_section_decoded:
+            #self.created_datetime = course_section_decoded['created_datetime']
+            self.section_id = course_section_decoded['id']
+            self.section_name = course_section_decoded['name']
+            self.section_description = course_section_decoded['description']
+            self.students = course_section_decoded['students']
+            self.is_active = course_section_decoded['active']
+            if 'year' in course_section_decoded:
+                self.section_year = course_section_decoded['year']
 
-    #ehiller - need ability to translate JSON data to CourseSectionEntity
-    def transform_course_data(self):
-        #ehiller - is_active is the main this I care about here, we can leave the datetime as a string until we
-        # actually need to do any datetime operations on it
-        if self.is_active == 'True' or self.is_active == 'true':
-            _is_active = True
-        else:
-            _is_active = False
+    def get_key(self):
+        user = users.get_current_user()
 
-        self.is_active = _is_active
+        if not user:
+            return None
+
+        temp_key = user.email() + '_' + self.section_name.replace(' ', '').lower() + self.section_year
+
+        return temp_key
 
     @classmethod
-    def add_new_course_section(cls, course_sections, section_id, section_name, section_description = None,
-                               is_active=True):
+    def json_encoder(cls, obj):
+        if isinstance(obj, cls):
+            return {
+                'id': obj.section_id,
+                'name': obj.section_name,
+                'description': obj.section_description,
+                'active': obj.is_active,
+                'students': obj.students,
+                'year': obj.section_year
+            }
+        return None
+
+    @classmethod
+    def add_new_course_section(cls, section_id, new_course_section):
 
         #initialize new course section
         course_section = CourseSectionEntity()
-        course_section.section_id = section_id
-        course_section.section_name = section_name
-        course_section.section_description = section_description
-        course_section.is_active = is_active
+
+        user = users.get_current_user()
+
+        #if section_id == None or len(section_id) == 0:
+        #    section_id = user.email() + '_' + new_course_section.name.replace(' ', '')
+
+        #course_section.section_id = section_id
+        course_section.section_name = new_course_section.name
+        course_section.section_description = new_course_section.description
+        course_section.is_active = new_course_section.active
+        course_section.section_year = new_course_section.year
+        course_section.section_id = course_section.get_key()
+
+        teacher = Teacher.get_teacher_by_user_id(user.user_id())
+
+        if not teacher:
+            return None
+
+        course_sections = CourseSectionEntity.get_course_sections_for_user()
 
         #add new section to list of sections passed in. this should add it by reference and set the collection
         course_sections[section_id] = course_section
+
+        teacher.sections = transforms.dumps(course_sections, {})
+
+        teacher.put()
+
+        return section_id
+
+    @classmethod
+    def update_course_section(cls, section_id, new_course_section):
+
+        course_sections = CourseSectionEntity.get_course_sections_for_user()
+
+        course_section = CourseSectionEntity()
+
+        course_section.section_id = section_id
+        course_section.section_name = new_course_section.name
+        course_section.section_description = new_course_section.description
+        course_section.is_active = new_course_section.active
+        course_section.students = new_course_section.students
+        course_section.section_year = new_course_section.year
+
+        course_sections[section_id] = course_section
+
+        user = users.get_current_user()
+        teacher = Teacher.get_teacher_by_user_id(user.user_id())
+
+        if not teacher:
+            return False
+
+        teacher.sections = transforms.dumps(course_sections, {})
+
+        teacher.put()
+
+        return True
+
 
     @classmethod
     def get_course_sections_for_user(cls):
@@ -434,18 +352,86 @@ class CourseSectionEntity(object):
         if not user:
             return None
 
-        teacher = Teacher.get_by_email(user.email)
+        teacher = Teacher.get_by_email(user.email())
 
         if not teacher:
             return None
 
-        course_sections = []
+        course_sections = dict()
 
-        course_sections_decoded = json.loads(teacher.sections)
+        if teacher.sections:
+            course_sections_decoded = transforms.loads(teacher.sections)
 
-        for course_section_decoded in course_sections_decoded:
-            course_section = CourseSectionEntity(course_section_decoded)
-            course_sections.append(course_section)
+            for course_section_key in course_sections_decoded:
+                course_section = CourseSectionEntity(course_sections_decoded[course_section_key])
+                course_sections[course_section.section_id] = course_section
 
         return course_sections
+
+    @classmethod
+    def get_course_for_user(cls, key):
+        user = users.get_current_user()
+
+        if not user:
+            return None
+
+        teacher = Teacher.get_by_email(user.email())
+
+        if not teacher:
+            return None
+
+        if teacher.sections:
+            course_sections_decoded = transforms.loads(teacher.sections)
+
+            for course_section_key in course_sections_decoded:
+                if course_section_key == key:
+                    return CourseSectionEntity(course_sections_decoded[course_section_key])
+
+
+class CourseSectionDTO(object):
+    def __init__(self, section_id, data_dict):
+        self._id = section_id
+        self.dict = data_dict
+
+    @classmethod
+    def build(cls, name, description, active, students=None, year=None):
+        return CourseSectionDTO(None, {
+            'name': name,
+            'description': description,
+            'active': active,
+            'students': students,
+            'year': year
+        })
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def name(self):
+        return self.dict.get('name')
+
+    @property
+    def description(self):
+        return self.dict.get('description')
+
+    @property
+    def active(self):
+        return self.dict.get('active')
+
+    @property
+    def students(self):
+        return self.dict.get('students')
+
+    @property
+    def year(self):
+        return self.dict.get('year')
+
+class CourseSectionDAO(BaseJsonDao):
+    DTO = CourseSectionDTO
+    ENTITY = CourseSectionEntity
+    ENTITY_KEY_TYPE = BaseJsonDao.EntityKeyTypeId
+
+
+
 

@@ -13,11 +13,12 @@ __author__ = 'ehiller@css.edu'
 import logging
 import jinja2
 import os
+import operator
 
 import appengine_config
 import teacher_entity
 
-from google.appengine.ext import db
+from google.appengine.api import users
 
 from common import tags
 from common import crypto
@@ -26,6 +27,13 @@ from models import courses
 from models import custom_modules
 from models import models
 from models import roles
+from models import transforms
+from models.models import Student
+
+from controllers.utils import BaseRESTHandler
+
+from common.resource import AbstractResourceHandler
+from common import schema_fields
 
 #since we are extending the dashboard, probably want to dashboard stuff
 from modules.dashboard import dashboard
@@ -126,9 +134,7 @@ class TeacherHandler(dashboard.DashboardHandler):
             )
 
         register_tab('sections', 'Sections', TeacherHandler)
-        register_tab('student', 'Student Profile', TeacherHandler)
         register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
-        register_tab('course_reg', 'Create Section', TeacherHandler)
 
         # skill_map_visualization = analytics.Visualization(
         #     'skill_map',
@@ -140,28 +146,42 @@ class TeacherHandler(dashboard.DashboardHandler):
 
     def get_teacher_dashboard(self):
         in_tab = self.request.get('tab') or self.DEFAULT_TAB
+        tab_action = self.request.get('tab_action') or None
 
         if in_tab == 'sections':
-            return self.get_sections()
-        elif in_tab == 'student':
-            return self.get_student()
+            if tab_action == 'roster':
+                return self.get_roster()
+            else:
+                return self.get_sections()
         elif in_tab == 'teacher_reg':
             return self.get_teacher_reg()
-        elif in_tab == 'course_reg':
-            return self.get_course_reg()
 
     def get_sections(self):
-        main_content = 'Course Section Content'
+        main_content = self.get_template(
+            'teacher_sections.html', [TEMPLATES_DIR]).render({})
 
         self.render_page({
             'page_title': self.format_title('Sections'),
             'main_content': jinja2.utils.Markup(main_content)})
 
-    def get_student(self):
+    def get_roster(self):
         template_values = {}
-        template_values['main_content'] = 'Student Dashboard Content'
+        template_values['add_student_xsrf_token'] = crypto.XsrfTokenManager.create_xsrf_token(CourseSectionRestHandler.XSRF_TOKEN)
 
-        return template_values['main_content']
+        course_section_id = self.request.get('section')
+
+        course_section = teacher_entity.CourseSectionEntity.get_course_for_user(course_section_id)
+
+        if course_section:
+            template_values['section'] = course_section
+
+        main_content = self.get_template(
+            'student_list.html', [TEMPLATES_DIR]).render(template_values)
+
+        self.render_page({
+            'page_title': self.format_title('Student List'),
+            'main_content': jinja2.utils.Markup(main_content)})
+
 
     def get_teacher_reg(self):
         template_values = {}
@@ -173,16 +193,6 @@ class TeacherHandler(dashboard.DashboardHandler):
             'page_title': self.format_title('Teacher Registration'),
             'main_content': jinja2.utils.Markup(main_content)})
 
-    def get_course_reg(self):
-        template_values = {}
-        template_values['course_section_reg_xsrf_token'] = self.create_xsrf_token('course_section_reg')
-        main_content = self.get_template(
-            'course_section_registration.html', [TEMPLATES_DIR]).render(template_values)
-
-        self.render_page({
-            'page_title': self.format_title('Section Registration'),
-            'main_content': jinja2.utils.Markup(main_content)})
-
     def post_teacher_reg(self):
         email = self.request.get('email')
         school = self.request.get('school')
@@ -190,54 +200,197 @@ class TeacherHandler(dashboard.DashboardHandler):
         #ehiller - check if the teacher already exists
         teacher = teacher_entity.Teacher.get_by_email(email)
 
-        template_values = {}
-        template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
-
         if teacher:
+            template_values = {}
             template_values['error_message'] = 'Teacher already registered'
+            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
+            self.render_page({
+                'page_title': self.format_title('Teacher Dashboard'),
+                'main_content': jinja2.utils.Markup(main_content)
+                },
+                'teacher_dashboard',
+                'teacher_reg'
+            )
         else:
             teacher_entity.Teacher.add_new_teacher_for_user(email, school, '')
 
+            template_values = {}
+            template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
-        self.render_page({
-            'page_title': self.format_title('Teacher Dashboard'),
-            'main_content': jinja2.utils.Markup(main_content)
-            },
-            'teacher_dashboard',
-            'teacher_reg'
-        )
+            self.render_page({
+                'page_title': self.format_title('Teacher Dashboard'),
+                'main_content': jinja2.utils.Markup(main_content)
+                },
+                'teacher_dashboard',
+                'teacher_reg'
+            )
 
-    def post_course_registration(self):
-        template_values = {}
-        template_values['course_section_reg_xsrf_token'] = self.create_xsrf_token('course_section_reg')
+class CourseSectionRestHandler(BaseRESTHandler):
+    """REST handler to manage skills."""
+
+    XSRF_TOKEN = 'section-handler'
+    SCHEMA_VERSIONS = ['1']
+
+    URL = '/rest/modules/teacher_dashboard/section'
+
+    @classmethod
+    def get_schema(cls):
+        """Return the schema for the section editor."""
+        return ResourceSection.get_schema(course=None, key=None)
+
+    def get(self):
+        """Get a section."""
+
+        if not roles.Roles.is_course_admin(self.app_context):
+            transforms.send_json_response(self, 401, 'Access denied.', {})
+            return
+
+        key = self.request.get('key')
 
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
-        section_id = self.request.get('section_id')
-        found_match = False
 
-        for course_section in course_sections:
-            if section_id == course_section.section_id:
-                template_values['error_message'] = 'Unable to create course section. Section already exists.'
-                found_match = True
+        sorted_course_sections = sorted(course_sections.values(), key=lambda k: (k.section_year,
+                                                                                 k.section_name.lower()))
+            #sorted(course_sections.values(), key=operator.attrgetter('section_year', 'section_name'))
 
+        payload_dict = {
+            'section_list': sorted_course_sections
+        }
 
+        if key:
+            payload_dict['section'] = teacher_entity.CourseSectionEntity.get_course_for_user(str(key))
 
-        main_content = self.get_template(
-            'course_section_registration.html', [TEMPLATES_DIR]).render(template_values)
-        template_values['main_content'] = main_content
+        transforms.send_json_response(
+            self, 200, '', payload_dict=payload_dict,
+            xsrf_token=crypto.XsrfTokenManager.create_xsrf_token(
+                self.XSRF_TOKEN))
 
-        self.render_page({
-            'page_title': self.format_title('Teacher Dashboard'),
-            'main_content': jinja2.utils.Markup(main_content)
-            },
-            'teacher_dashboard',
-            'course_reg'
-        )
+    def delete(self):
+        """Deletes a section."""
+        pass
+
+    def put(self):
+        request = transforms.loads(self.request.get('request'))
+        key = request.get('key')
+
+        if not self.assert_xsrf_token_or_fail(
+                request, self.XSRF_TOKEN, {}):
+            return
+
+        if not roles.Roles.is_course_admin(self.app_context):
+            transforms.send_json_response(
+                self, 401, 'Access denied.', {'key': key})
+            return
+
+        payload = request.get('payload')
+        json_dict = transforms.loads(payload)
+        python_dict = transforms.json_to_dict(
+            json_dict, self.get_schema().get_json_schema_dict(),
+            permit_none_values=True)
+
+        version = python_dict.get('version')
+        if version not in self.SCHEMA_VERSIONS:
+            self.validation_error('Version %s not supported.' % version)
+            return
+
+        errors = []
+
+        if key:
+            key_after_save = key
+            new_course_section = teacher_entity.CourseSectionEntity.get_course_for_user(key)
+
+            students = new_course_section.students or {}
+            emails = ""
+            if 'students' in python_dict and python_dict['students'] is not None:
+                emails = python_dict['students'].split(',')
+            for email in emails:
+                student = Student.get_by_email(email)
+                if student:
+                    student_info = {}
+                    student_info['email'] = email
+                    student_info['name'] = student.name
+                    student_info['user_id'] = student.user_id
+                    students[student.user_id] = student_info
+
+            if python_dict.get('name') != None:
+                new_course_section.section_name = python_dict.get('name')
+            if python_dict.get('active') != None:
+                new_course_section.is_active = python_dict.get('active')
+            if python_dict.get('description') != None:
+                new_course_section.section_description = python_dict.get('description')
+            if python_dict.get('year') != None:
+                new_course_section.section_year = python_dict.get('year')
+
+            course_section = teacher_entity.CourseSectionDTO.build(
+                new_course_section.section_name, new_course_section.section_description,
+                new_course_section.is_active, students, new_course_section.section_year)
+            teacher_entity.CourseSectionEntity.update_course_section(key, course_section)
+        else:
+            course_section = teacher_entity.CourseSectionDTO.build(
+                python_dict.get('name'), python_dict.get('description'), python_dict.get('active'), {},
+                python_dict.get('year'))
+            key_after_save = teacher_entity.CourseSectionEntity.add_new_course_section(key, course_section)
+
+        if errors:
+            self.validation_error('\n'.join(errors), key=key)
+            return
+
+        payload_dict = {
+            'key': key_after_save,
+            'section': teacher_entity.CourseSectionEntity.get_course_for_user(key_after_save),
+            'section_list': teacher_entity.CourseSectionEntity.get_course_sections_for_user()
+        }
+
+        transforms.send_json_response(
+            self, 200, 'Saved.', payload_dict)
+
+class ResourceSection(AbstractResourceHandler):
+
+    TYPE = 'course_section'
+
+    @classmethod
+    def get_resource(cls, course, key):
+        return teacher_entity.CourseSectionDAO.load(key)
+
+    @classmethod
+    def get_resource_title(cls, rsrc):
+        return rsrc.name
+
+    @classmethod
+    def get_schema(cls, course, key):
+
+        schema = schema_fields.FieldRegistry(
+            'Section', description='section')
+        schema.add_property(schema_fields.SchemaField(
+            'version', '', 'string', optional=True, hidden=True))
+        schema.add_property(schema_fields.SchemaField(
+            'name', 'Name', 'string', optional=True))
+        schema.add_property(schema_fields.SchemaField(
+            'description', 'Description', 'text', optional=True))
+        schema.add_property(schema_fields.SchemaField(
+            'active', 'Active', 'boolean', optional=True))
+        schema.add_property(schema_fields.SchemaField(
+            'students', 'Students', 'string', optional=True))
+        schema.add_property(schema_fields.SchemaField(
+            'year', 'Year', 'string', optional=True))
+        return schema
+
+    @classmethod
+    def get_data_dict(cls, course, key):
+        return cls.get_resource(course, key).dict
+
+    @classmethod
+    def get_view_url(cls, rsrc):
+        return None
+
+    @classmethod
+    def get_edit_url(cls, key):
+        return None
 
 #Not needed as far as I know, at least, until we run into a scenario where we might need to define roles specific to
 # this module (can edit students maybe, something like that)
@@ -259,7 +412,6 @@ def notify_module_enabled():
 
     #add post actions
     dashboard.DashboardHandler.add_custom_post_action('teacher_reg', TeacherHandler.post_teacher_reg)
-    dashboard.DashboardHandler.add_custom_post_action('course_section_reg', TeacherHandler.post_course_registration)
 
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)
@@ -275,6 +427,14 @@ def notify_module_enabled():
         ACCESS_PEERREVIEW_PERMISSION, ACCESS_PEERREVIEW_PERMISSION_DESCRIPTION)
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_SKILLMAP_PERMISSION, ACCESS_SKILLMAP_PERMISSION_DESCRIPTION)
+
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/popup.js')
+
+    dashboard.DashboardHandler.EXTRA_CSS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/css/student_list.css')
+
+    transforms.CUSTOM_JSON_ENCODERS.append(teacher_entity.CourseSectionEntity.json_encoder)
 
     #register tabs
     TeacherHandler.register_tabs()
@@ -298,11 +458,13 @@ def register_module():
 
     global_routes = [
         (os.path.join(RESOURCES_PATH, 'js', '.*'), tags.JQueryHandler),
-        (os.path.join(RESOURCES_PATH, '.*'), tags.ResourcesHandler)
+        (os.path.join(RESOURCES_PATH, '.*'), tags.ResourcesHandler),
+        (RESOURCES_PATH + '/js/popup.js', tags.IifeHandler)
        ]
 
     namespaced_routes = [
-         (TeacherHandler.URL, TeacherHandler)
+         (TeacherHandler.URL, TeacherHandler),
+        (CourseSectionRestHandler.URL, CourseSectionRestHandler)
         ]
 
     global custom_module  # pylint: disable=global-statement

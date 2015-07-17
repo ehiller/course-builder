@@ -1102,6 +1102,41 @@ class UnitLessonCompletionTracker(object):
                 result[full_element_type] = element_value
         return result
 
+    def get_detailed_progress(self, student, course):
+        units = []
+        progress = self.get_or_create_progress(student)
+        unit_completion = self.get_unit_percent_complete(student)
+
+        # for unit in course.get_units():
+        #     if course.get_parent_unit(unit.unit_id):
+        #         continue
+        #     if unit.unit_id in unit_completion:
+        #        # logging.info('Barok >>>>>>>>>>>>>>> percent completion unit_id = %s: %s', unit.unit_id, unit_completion[unit.unit_id])
+        for unit in course.get_units():
+            # Don't show assessments that are part of units.
+            if course.get_parent_unit(unit.unit_id):
+                continue
+
+            if unit.unit_id in unit_completion:
+                lessons = course.get_lessons(unit.unit_id)
+                lesson_status = self.get_lesson_progress(student, unit.unit_id)
+                lesson_progress = []
+                for lesson in lessons:
+                    lesson_progress.append({
+                        'lesson_id': lesson.lesson_id,
+                        'title': lesson.title,
+                        'completion': lesson_status[lesson.lesson_id]['activity'],
+                    })
+                    activity_status = self.get_activity_status(progress, unit.unit_id, lesson.lesson_id)
+                    logging.info('Barok >>>>>>>>>>>>>>> Lesson has activities: %s', lesson_status[lesson.lesson_id]['has_activity'])
+                units.append({
+                    'unit_id': unit.unit_id,
+                    'title': unit.title,
+                    'labels': list(course.get_unit_track_labels(unit)),
+                    'completion': unit_completion[unit.unit_id],
+                    'lessons': lesson_progress,
+                    })
+        return units
 
 class ProgressStats(object):
     """Defines the course structure definition for course progress tracking."""

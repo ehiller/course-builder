@@ -1,27 +1,32 @@
+<link rel="stylesheet" href="../resources/css/view.css" type="text/css">
+<link rel="stylesheet" href="../resources/css/student_progress.css" type="text/css">
+
 <div name="student_list" id="student_list">
     <form>
         <input type="hidden" name="action" value="student_list" />
         <input type="hidden" name="xsrf_token" value="{{ student_list_xsrf_token|escape }}">
 
-        <div class="sl-header" name="student_list_header">
+        <div id="sl-info" name="student_list_header">
             <div>
-                <label>Course Name:</label>
-                <label>{{section.section_name}}</label>
+                <label class="title">Course Name:</label>
+                <label class="data">{{section.section_name}}</label>
             </div>
             <div>
-                <label>Academic Year:</label>
-                <label>{{section.section_year}}</label>
+                <label class="title">Academic Year:</label>
+                <label class="data">{{section.section_year}}</label>
             </div>
             <div>
-                <label>Status:</label>
-                <label>{{section.section_active}}</label>
+                <label class="title">Status:</label>
+                <label class="data">{{section.section_active}}</label>
             </div>
             <div>
-                <label>Description:</label>
-                <label>{{section.section_description}}</label>
+                <label class="title">Description:</label>
+                <label class="data-last">{{section.section_description}}</label>
             </div>
-            <div>
-                <label class="gcb-button add-students">Add Students</label>
+        </div>
+        
+            <div class="student-list-nav-bar-div">
+                <a class="gcb-button add-students gcb-pull-right">Add Students</a>
 
                 <script>
                     $(function() {
@@ -36,35 +41,47 @@
                         })
                     });
                 </script>
+                
+                <a class="gcb-button gcb-pull-right" href="#deleteStudent">Delete Student</a>
+                <a class="gcb-button gcb-pull-right" href="#editSection">Edit Section</a>
+                <a class="gcb-button gcb-pull-right" href="#addSection">Create/Add Section</a>
+                
+                <div style="clear: both; padding-top: 2px;">
+                    <h3>Students (2)</h3>
+                </div>
+            </div>
+
+        <p class="description">Manage your student enrollment here.</p>
+
+        <div id="sl-left">
+            <div class="student-progress">
+                <div class="row">
+                    <div class="left-matter header">
+                        <div class="name">Student Name</div>
+                    </div>
+                    <div class="header">
+                        <div class="name">Email</div>
+                    </div>
+                </div>
+                <ol class="sl-students">
+                     {% for student_key in section.students %}
+                        <li data-unit-id="1">
+                            <div class="row student">
+                                <div class="left-matter">
+                                    <div class="fname">{{ section.students[student_key]['name'] }}</div>
+                                    <div class="lname">LastName</div>
+                                </div>
+                                <div class="email">{{ section.students[student_key]['email'] }}</div>
+                                <div class="percent-completed">20%</div>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ol>
             </div>
         </div>
 
-        <div id="sl-right">
-            <table class="student-list-table" name="student_list_table">
-                <thead>
-                    <tr>
-                        <th colspan="3">Students</th>
-                    </tr>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Course Completion</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for student_key in section.students %}
-                        <tr>
-                            <td>{{ section.students[student_key]['name'] }}</td>
-                            <td>{{ section.students[student_key]['email'] }}</td>
-                            <td>20%</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
         <div class="sl-footer">
-            <a class="gcb-button" href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=">Exit</a>
+            <a class="gcb-button gcb-pull-right" href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=">Exit</a>
         </div>
 
     </form>

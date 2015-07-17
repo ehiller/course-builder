@@ -142,6 +142,7 @@ div.student-progress div.extras {
 progress[value] {
   width: 250px;
   height: 20px;
+  margin-top: 3px;
 
   /* Reset the default appearance */
   -webkit-appearance: none;

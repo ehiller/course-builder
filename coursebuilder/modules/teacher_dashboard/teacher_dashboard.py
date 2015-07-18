@@ -254,8 +254,12 @@ class CourseSectionRestHandler(BaseRESTHandler):
 
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
 
-        sorted_course_sections = sorted(course_sections.values(), key=lambda k: (k.section_year,
+        if course_sections is not None:
+            sorted_course_sections = sorted(course_sections.values(), key=lambda k: (k.section_year,
                                                                                  k.section_name.lower()))
+        else:
+            sorted_course_sections = {}
+
             #sorted(course_sections.values(), key=operator.attrgetter('section_year', 'section_name'))
 
         payload_dict = {

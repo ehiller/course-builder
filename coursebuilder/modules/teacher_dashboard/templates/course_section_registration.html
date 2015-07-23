@@ -10,10 +10,8 @@
         <ul>
             {% for course_section_id in course_sections %}
                 <li>{{ course_sections[course_section_id].section_name }}
-                    <a
-                            href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&course_section={{course_section_id}}">Edit</a>
-                    <a
-                            href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&tab_action=add_students&course_section={{course_section_id}}">Add Students</a>
+                    <a href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&course_section={{course_section_id}}">Edit</a>
+                    <a href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&tab_action=add_students&course_section={{course_section_id}}">Add Students</a>
                 </li>
             {% endfor %}
         </ul>

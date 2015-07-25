@@ -1,0 +1,64 @@
+<link rel="stylesheet" href="../resources/css/student_progress.css" type="text/css">
+<link rel="stylesheet" href="../resources/css/view.css" type="text/css">
+
+<div style="clear: both; padding-top: 2px;">
+            <h3>Students (2)</h3>
+        </div>
+
+        <p class="description">View your student's progress here.</p>
+
+<div class="student-progress">
+    <div class="row">
+        <div class="left-matter col-one header">
+            <div class="name">Student Name</div>
+        </div>
+        <div class="left-matter col-two header">
+            <div class="name">Completion Percentage</div>
+        </div>
+        <div class="left-matter col-three header">
+            <div class="name">Points Awarded</div>
+        </div>
+        <div class="left-matter col-four header">
+            <div class="name">Percent Correct</div>
+        </div>
+        <div class="header">
+            <div class="name">Attempt</div>
+        </div>
+    </div>
+    <ol class="sl-students">
+        <li data-unit-id="1">
+            <div class="row student">
+                <div class="left-matter col-one">First Row</div>
+                <div class="percent-completed col-two">
+                    <progress value=".1">
+                        <!-- Browsers that support the progress tag will ignore this div -->
+                        <div class="progress-bar">
+                            <span style="width: 10%;">Progress: 10%</span>
+                        </div>
+                    </progress>
+                    10%
+                </div>
+                <div class="points-awarded col-three">6 / 9</div>
+                <div class="percent-correct col-four">66%</div>
+                <div class="attempts">-</div>
+            </div>
+        </li>
+        <li data-unit-id="2">
+            <div class="row student">
+                <div class="left-matter col-one">Second Row</div>
+                <div class="percent-completed col-two">
+                    <progress value=".1">
+                        <!-- Browsers that support the progress tag will ignore this div -->
+                        <div class="progress-bar">
+                            <span style="width: 10%;">Progress: 10%</span>
+                        </div>
+                    </progress>
+                    10%
+                </div>
+                <div class="points-awarded col-three">6 / 9</div>
+                <div class="percent-correct col-four">66%</div>
+                <div class="attempts">-</div>
+            </div>
+        </li>
+    </ol>
+</div>

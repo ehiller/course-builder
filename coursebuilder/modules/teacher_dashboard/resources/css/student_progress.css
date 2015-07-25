@@ -48,6 +48,9 @@ div.student-progress li {
   margin: 0 !important;
   padding: 0;
 }
+ol li {
+  list-style-type: none;
+}
 div.student-progress div.row {
   transition: background-color 200ms;
   height: 28px;
@@ -70,6 +73,26 @@ div.student-progress div.row:hover {
 div.student-progress div.left-matter {
   display: inline-block;
   width: 580px;
+  border-right: solid #ccc 1px;
+}
+div.student-progress div.col-one {
+  display: inline-block;
+  width: 510px;
+  border-right: solid #ccc 1px;
+}
+div.student-progress div.col-two {
+  display: inline-block;
+  width: 310px;
+  border-right: solid #ccc 1px;
+}
+div.student-progress div.col-three {
+  display: inline-block;
+  width: 150px;
+  border-right: solid #ccc 1px;
+}
+div.student-progress div.col-four {
+  display: inline-block;
+  width: 120px;
   border-right: solid #ccc 1px;
 }
 div.student-progress div.row.course > div > div.name {
@@ -136,6 +159,15 @@ div.student-progress div.reorder {
 }
 div.student-progress div.extras {
   padding-right: 20px;
+}
+
+div.percent-correct {
+  text-align: right;
+  padding-right: 4px;
+}
+
+div.attempts {
+  text-align: center;
 }
 
 /* This styles the progress bars on the page */

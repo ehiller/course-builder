@@ -308,7 +308,7 @@ class CourseSectionEntity(object):
         course_sections = CourseSectionEntity.get_course_sections_for_user()
 
         #add new section to list of sections passed in. this should add it by reference and set the collection
-        course_sections[section_id] = course_section
+        course_sections[course_section.get_key()] = course_section
 
         teacher.sections = transforms.dumps(course_sections, {})
 

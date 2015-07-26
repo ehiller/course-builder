@@ -29,6 +29,7 @@ from models import models
 from models import roles
 from models import transforms
 from models.models import Student
+from models.progress import UnitLessonCompletionTracker
 
 from controllers.utils import BaseRESTHandler
 
@@ -134,15 +135,8 @@ class TeacherHandler(dashboard.DashboardHandler):
             )
 
         register_tab('sections', 'Sections', TeacherHandler)
+        register_tab('student_detail', 'Student Dashboard', TeacherHandler)
         register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
-
-        # skill_map_visualization = analytics.Visualization(
-        #     'skill_map',
-        #     'Skill Map Analytics',
-        #     'templates/skill_map_analytics.html',
-        #     data_source_classes=[SkillMapDataSource])
-        # tabs.Registry.register('analytics', 'skill_map', 'Skill Map',
-        #                        [skill_map_visualization])
 
     def get_teacher_dashboard(self):
         in_tab = self.request.get('tab') or self.DEFAULT_TAB
@@ -155,6 +149,8 @@ class TeacherHandler(dashboard.DashboardHandler):
                 return self.get_sections()
         elif in_tab == 'teacher_reg':
             return self.get_teacher_reg()
+        elif in_tab == 'student_detail':
+            return self.get_student_dashboard()
 
     def get_sections(self):
         main_content = self.get_template(
@@ -163,6 +159,42 @@ class TeacherHandler(dashboard.DashboardHandler):
         self.render_page({
             'page_title': self.format_title('Sections'),
             'main_content': jinja2.utils.Markup(main_content)})
+
+    def get_student_dashboard(self):
+
+        student_email = self.request.get('student') or None #email will be in the request if opened from student list
+        # view, otherwise just show dropdown
+
+        students = []
+        course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
+        for course_section_key in course_sections:
+            for student_key in course_sections[course_section_key].students:
+                if not course_sections[course_section_key].students[student_key] in students:
+                    students.append(course_sections[course_section_key].students[student_key])
+
+        if student_email:
+            student = Student.get_by_email(student_email)
+
+
+        if (student):
+            course = self.get_course()
+            units = StudentProgressTracker.get_detailed_progress(student, course)
+        else:
+            units = None
+
+        main_content = self.get_template(
+            'student_detailed_progress.html', [TEMPLATES_DIR]).render(
+                {
+                    'units': units,
+                    'student': student,
+                    'students': students
+                })
+
+        self.render_page({
+            'page_title': self.format_title('Student Dashboard'),
+            'main_content': jinja2.utils.Markup(main_content)
+        })
+
 
     def get_roster(self):
         template_values = {}
@@ -229,6 +261,85 @@ class TeacherHandler(dashboard.DashboardHandler):
                 'teacher_dashboard',
                 'teacher_reg'
             )
+
+class StudentProgressTracker(object):
+
+     @classmethod
+     def get_detailed_progress(self, student, course):
+        units = []
+
+        tracker = course.get_progress_tracker()
+
+        progress = tracker.get_or_create_progress(student)
+        unit_completion = tracker.get_unit_percent_complete(student)
+
+        # for unit in course.get_units():
+        #     if course.get_parent_unit(unit.unit_id):
+        #         continue
+        #     if unit.unit_id in unit_completion:
+        #        # logging.info('Barok >>>>>>>>>>>>>>> percent completion unit_id = %s: %s', unit.unit_id, unit_completion[unit.unit_id])
+        for unit in course.get_units():
+            # Don't show assessments that are part of units.
+            if course.get_parent_unit(unit.unit_id):
+                continue
+
+            if unit.unit_id in unit_completion:
+                lessons = course.get_lessons(unit.unit_id)
+                lesson_status = tracker.get_lesson_progress(student, unit.unit_id)
+                lesson_progress = []
+                for lesson in lessons:
+                    lesson_progress.append({
+                        'lesson_id': lesson.lesson_id,
+                        'title': lesson.title,
+                        'completion': lesson_status[lesson.lesson_id]['activity'],
+                    })
+                    activity_status = tracker.get_activity_status(progress, unit.unit_id, lesson.lesson_id)
+                    logging.info('Barok >>>>>>>>>>>>>>> Lesson has activities: %s', lesson_status[lesson.lesson_id]['has_activity'])
+                units.append({
+                    'unit_id': unit.unit_id,
+                    'title': unit.title,
+                    'labels': list(course.get_unit_track_labels(unit)),
+                    'completion': unit_completion[unit.unit_id],
+                    'lessons': lesson_progress,
+                    })
+        return units
+
+class StudentProgressRestHandler(BaseRESTHandler):
+    """REST handler to manage retrieving student progress."""
+
+    XSRF_TOKEN = 'student-progress-handler'
+    SCHEMA_VERSIONS = ['1']
+
+    URL = '/rest/modules/teacher_dashboard/student_progress'
+
+    @classmethod
+    def get_schema(cls):
+        #TODO: implement a schema if necessary, not sure if needed since we aren't putting any data
+        pass
+
+    def get(self):
+        """Get a students progress."""
+
+        if not roles.Roles.is_course_admin(self.app_context):
+            transforms.send_json_response(self, 401, 'Access denied.', {})
+            return
+
+        key = self.request.get('key')
+
+        student = Student.get_by_email(key)
+        course = self.get_course()
+
+        units = StudentProgressTracker.get_detailed_progress(student, course)
+
+        payload_dict = {
+            'units': units,
+            'student': student
+        }
+
+        transforms.send_json_response(
+            self, 200, '', payload_dict=payload_dict,
+            xsrf_token=crypto.XsrfTokenManager.create_xsrf_token(
+                self.XSRF_TOKEN))
 
 class CourseSectionRestHandler(BaseRESTHandler):
     """REST handler to manage skills."""
@@ -463,12 +574,14 @@ def register_module():
     global_routes = [
         (os.path.join(RESOURCES_PATH, 'js', '.*'), tags.JQueryHandler),
         (os.path.join(RESOURCES_PATH, '.*'), tags.ResourcesHandler),
-        (RESOURCES_PATH + '/js/popup.js', tags.IifeHandler)
+        (RESOURCES_PATH + '/js/popup.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/course_section_analytics.js', tags.IifeHandler)
        ]
 
     namespaced_routes = [
          (TeacherHandler.URL, TeacherHandler),
-        (CourseSectionRestHandler.URL, CourseSectionRestHandler)
+         (CourseSectionRestHandler.URL, CourseSectionRestHandler),
+         (StudentProgressRestHandler.URL, StudentProgressRestHandler)
         ]
 
     global custom_module  # pylint: disable=global-statement

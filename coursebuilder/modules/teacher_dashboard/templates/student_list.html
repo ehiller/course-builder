@@ -17,7 +17,7 @@
             </div>
             <div>
                 <label class="title">Status:</label>
-                <label class="data">{{section.section_active}}</label>
+                <label class="data">{{section.is_active}}</label>
             </div>
             <div>
                 <label class="title">Description:</label>
@@ -47,13 +47,37 @@
                 <a class="gcb-button gcb-pull-right" href="#addSection">Create/Add Section</a>
                 
                 <div style="clear: both; padding-top: 2px;">
-                    <h3>Students (2)</h3>
+                    <h3>Students</h3>
                 </div>
             </div>
 
         <p class="description">Manage your student enrollment here.</p>
 
-        <div id="sl-left">
+        <div id="sl-right">
+            <table class="student-list-table" name="student_list_table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Course Completion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student_key in section.students %}
+                        <tr>
+                            <td><a class="gcb-button" role="button"
+                                   href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student={{ section.students[student_key]['email'] }}">View Dashboard</a></td>
+                            <td>{{ section.students[student_key]['name'] }}</td>
+                            <td>{{ section.students[student_key]['email'] }}</td>
+                            <td>20%</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!--<div id="sl-left">
             <div class="student-progress">
                 <div class="row">
                     <div class="left-matter header">
@@ -77,7 +101,7 @@
                     {% endfor %}
                 </ol>
             </div>
-        </div>
+        </div>-->
 
         <div class="sl-footer">
             <a class="gcb-button gcb-pull-right" href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=">Exit</a>

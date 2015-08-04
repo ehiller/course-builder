@@ -1,6 +1,8 @@
 {% if students %}
-    <label>Please enter a student email: </label>
-    <input id="students_dropdown">
+    <div style="margin-bottom: 15px;">
+        <label>Please enter a student email: </label>
+        <input id="students_dropdown">
+    </div>
 
     <script>
          $(document).ready(function(){
@@ -9,7 +11,23 @@
             $("#students_dropdown").autocomplete({
                 source: data,
                 select: function (a, b) {
+                    var unitList = new UnitList();
 
+                    var unitListLoaded = $.Deferred(function(def) {
+                      unitList.load(function() {
+                        def.resolve()
+                      }, b.item.value);
+                    });
+                    $.when(unitListLoaded).then(function() {
+                      var studentDetailTable = new StudentDetailTable(unitList);
+                      $('.student-detail-table').remove('tbody');
+                      studentDetailTable._buildBody().appendTo('.student-detail-table');
+
+                      $('.student-name').text(unitList.getStudentName());
+                      $('.student-email').text(unitList.getStudentEmail());
+                    });
+
+                    //  $('.student-name').text('
                 }
             });
         });
@@ -18,18 +36,15 @@
 
 {% if student %}
 
-    <div class="student-detail">
-        <div>
-            <label class="title">Student Name:</label>
-            <label class="data student-name">{{student.name}}</label>
-        </div>
-        <div>
-            <label class="title">Student Email:</label>
+    <h3>Student Dashboard for {{ student.name }}</h3>
+
+    <div class="student-detail" style="margin: 5px;">
+        <div style="margin: 3px;">
             <label class="data student-email">{{student.email}}</label>
         </div>
     </div>
 
-    <table class="gcb-student-data-table">
+    <table class="student-detail-table" style="margin-top: 15px;">
       <colgroup>
         <col style="width: 10%">
         <col>

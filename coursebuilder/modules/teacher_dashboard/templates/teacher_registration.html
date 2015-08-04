@@ -1,11 +1,12 @@
 <link rel="stylesheet" href="../resources/css/view.css" type="text/css">
 
 <div>
-    {% if error_message %}
-        <h2>Errors</h2>
-        {{ error_message }}
-        <br />
-        <br />
+    {% if alert_messages %}
+        <script>
+            $(function() {
+                cbShowAlert("{{ alert_messages | js_string }}");
+            });
+        </script>
     {% endif %}
 
     <div style="clear: both; padding-top: 2px;">
@@ -18,9 +19,15 @@
         <input type="hidden" name="action" value="teacher_reg" />
         <input type="hidden" name="xsrf_token" value="{{ teacher_reg_xsrf_token|escape }}">
 
-        Primary Email: <input type="text" name="email" size="35">
+        <div style="max-width: 350px;">
+            <label for="email" style="width: 100%;">Email:</label><br />
+            <input id="email" type="text" name="email" size="35">
+            <br /><br />
+            <label for="school" style="width: 100%; margin-top: 15px;">School:</label>
+            <br />
+            <input id="school" type="text" name="school" size="35">
+        </div>
         <br />
-        School: <input type="text" name="school" size="35">
-        <input class="gcb-button" type="submit" value="Register" />
+        <input style="margin: 10px 0px 10px 0px; " class="gcb-button" type="submit" value="Register" />
     </form>
 </div>

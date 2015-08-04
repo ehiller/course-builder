@@ -171,10 +171,10 @@ SectionTable.prototype = {
     var that = this;
 
     this._content = $(
-      '<div class="controls">' +
+      '<div class="controls" style="margin: 10px;">' +
       '  <button class="gcb-button add-new-section">+ Create New Section</button>' +
       '</div>' +
-      '<h3>Sections Table</h3>' +
+      '<h3>Sections</h3>' +
       '<table class="sections-table"></table>');
 
     this._table = this._content.filter('table.sections-table');
@@ -410,28 +410,29 @@ function EditSectionPopup(sectionList, sectionId) {
   this._lightbox = new Lightbox();
   this._form = $(
       '<div class="edit-section-popup">' +
-      '  <div class="course-name">' +
+      '  <h2 class="title" style="text-align: center; margin-left: 0px;"></h2>' +
+      '  <div class="course-name" style="margin: 15px;">' +
       '    <label name="course_name_lbl">Enter Course Name:</label>' +
-      '    <input type="text" name="section_name" class="section-name" />' +
+      '    <input style="margin-left: 3px;" type="text" name="section_name" class="section-name gcb-pull-right" />' +
       '  </div>' +
-      '  <div class="course-date">' +
+      '  <div class="course-date" style="margin: 15px;">' +
       '    <label name="course_date_lbl">Academic Year:</label>' +
-      '    <select class="section-year">' +
+      '    <select class="section-year gcb-pull-right">' +
       '      <option value="2015-2016">2015-2016</option>' +
       '      <option value="2016-2017">2016-2017</option>' +
       '      <option value="2017-2018">2017-2018</option>' +
       '      <option value="2018-2019">2018-2019</option>' +
       '    </select>' +
       '  </div>' +
-      '  <div class="course-active">' +
-      '    <input type="checkbox" class="section-active" value="True" text="Course Active" checked />' +
+      '  <div class="course-active" style="margin: 15px;">' +
       '    <label name="active_lbl">Course Active</label>' +
+      '    <input type="checkbox" class="section-active gcb-pull-right" value="True" text="Course Active" checked />' +
       '  </div>' +
-      '  <div class="course-description">' +
-      '    <label name="course_description_lbl">Course Description:</label>' +
-      '    <input type="text" class="section-description" />' +
+      '  <div class="course-description" style="margin: 15px;">' +
+      '    <label name="course_description_lbl" style="vertical-align: top;">Course Description:</label>' +
+      '    <textarea class="section-description" cols="25" rows="5"></textarea>' +
       '  </div>' +
-      '  <div class="controls">' +
+      '  <div class="controls" style="margin-left: auto; margin-right: auto; text-align: center;">' +
       '    <button class="gcb-button new-section-save-button">Save</button>' +
       '    <button class="gcb-button new-section-cancel-button">Cancel</button>' +
       '</div>');
@@ -529,13 +530,13 @@ function AddStudentsPopup(sectionId, xsrfToken) {
   this._lightbox = new Lightbox();
   this._form = $(
       '<div class="add-students-popup">' +
-      '  <h2 class="title">Add Students</h2>' +
+      '  <h2 style="text-align: center; margin-left: 0px;" class="title">Add Students</h2>' +
       '  <div class="form-row">' +
-      '    <label>Students</label>' +
-      '    <textarea class="student-emails"' +
+      '    <label style="vertical-align: top; margin-left: 8px; margin-bottom: 5px;">Students</label><br />' +
+      '    <textarea style="margin: 8px;" class="student-emails" rows="5"' +
       '        placeholder="Enter student emails..."></textarea>' +
       '  </div>' +
-      '  <div class="controls">' +
+      '  <div class="controls" style="text-align: center">' +
       '    <button class="gcb-button add-students-save-button">Save</button>' +
       '    <button class="gcb-button add-students-cancel-button">Cancel</button>' +
       '  </div>' +
@@ -583,7 +584,9 @@ AddStudentsPopup.prototype = {
     return this;
   },
 
-  rebuildStudentsTable(students, table) {
+  rebuildStudentsTable(students, table, unitSelect) {
+
+    table.remove('tbody');
     var tbody = $('<tbody></tbody>');
 
     for (var key in students) {
@@ -592,6 +595,15 @@ AddStudentsPopup.prototype = {
         var tr = $('<tr></tr>');
 
         var td = $(
+            '<td>' +
+            '  <a class="gcb-button" role="button"' +
+            '      href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student={{' +
+            '      section.students[student_key]["email"] }}">View Dashboard</a>' +
+            '</td>'
+        );
+        tr.append(td);
+
+        td = $(
             '<td>' +
             '  <span class="student-name"></span>' +
             '</td>'
@@ -615,7 +627,21 @@ AddStudentsPopup.prototype = {
             '</td>'
         );
 
-        td.find('.student-completion').text('20%');
+        var completionValue = student.course_completion;
+
+        if (unitSelect != null) {
+            var unitId = $(unitSelect).val();
+            $.each(student.unit_completion, function (index, value) {
+                if (unitId == 'course_completion') {
+                    completionValue = student.course_completion;
+                }
+                else if (unitId == index) {
+                    completionValue = value;
+                }
+            });
+        }
+
+        td.find('.student-completion').text(completionValue + '%');
         tr.append(td);
 
         tbody.append(tr);
@@ -1005,6 +1031,28 @@ SectionEditorForOeditor.prototype = {
   }
 };
 
+
+/**
+ * functions to rebuild completion column based off of selected unit
+ */
+function rebuildCompletionColumn(students, unitSelect) {
+    var unitId = $(unitSelect).val();
+    $('.student-list-table > tbody > tr').each(function(index, value) {
+        var completionValue;
+        var studentId = $(this).find('.student-id').val();
+
+        if (unitId != 'course_completion') {
+            completionValue = students[studentId].unit_completion[unitId] * 100;
+        }
+        else {
+            completionValue = students[studentId].course_completion;
+        }
+
+        $(this).find('.student-completion').text(completionValue + '%');
+
+    });
+}
+
 /**
  * Export the classes which will be used in global scope.
  */
@@ -1012,3 +1060,8 @@ window.SectionEditorForOeditor = SectionEditorForOeditor;
 window.SectionList = SectionList;
 window.SectionTable = SectionTable;
 window.AddStudentsPopup = AddStudentsPopup;
+
+/**
+ * Adding function to global scope for use in section list view
+ */
+window.RebuildCompletionColumn = rebuildCompletionColumn;

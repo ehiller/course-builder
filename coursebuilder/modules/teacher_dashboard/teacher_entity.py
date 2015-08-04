@@ -91,8 +91,8 @@ class Teacher(BaseEntity):
 
     @classmethod
     def add_new_teacher_for_user(
-        cls, email, school, additional_fields):
-        TeacherProfileDAO.add_new_teacher_for_user(email, school, additional_fields)
+        cls, email, school, additional_fields, alerts):
+        TeacherProfileDAO.add_new_teacher_for_user(email, school, additional_fields, alerts)
 
     @classmethod
     def get_by_email(cls, email):
@@ -184,12 +184,19 @@ class TeacherProfileDAO(object):
 
     @classmethod
     def add_new_teacher_for_user(
-            cls, email,  school, additional_fields):
+            cls, email,  school, additional_fields, alerts):
 
         student_by_email = Student.get_by_email(email)
 
+        if not student_by_email:
+            alerts.append('No student exists associated with that email')
+            return None
+
         teacher = cls._add_new_teacher_for_user(
             student_by_email.user_id, email, student_by_email.name, school, additional_fields)
+
+        if teacher:
+            alerts.append('Teacher was successfully registered')
 
         return teacher
 
@@ -216,7 +223,6 @@ class TeacherProfileDAO(object):
         # create new teacher
         teacher = Teacher.get_by_email(email)
         if not teacher:
-            # TODO(psimakov): we must move to user_id as a key
             teacher = Teacher(key_name=email)
 
         # update profile
@@ -283,12 +289,16 @@ class CourseSectionEntity(object):
         return None
 
     @classmethod
-    def add_new_course_section(cls, section_id, new_course_section):
+    def add_new_course_section(cls, section_id, new_course_section, errors):
 
         #initialize new course section
         course_section = CourseSectionEntity()
 
         user = users.get_current_user()
+
+        if not user:
+            errors.append('Unable to add course section. User not found.')
+            return False
 
         #if section_id == None or len(section_id) == 0:
         #    section_id = user.email() + '_' + new_course_section.name.replace(' ', '')
@@ -303,6 +313,7 @@ class CourseSectionEntity(object):
         teacher = Teacher.get_teacher_by_user_id(user.user_id())
 
         if not teacher:
+            errors.append('Unable to add course section. Teacher Entity not found.')
             return None
 
         course_sections = CourseSectionEntity.get_course_sections_for_user()
@@ -317,7 +328,7 @@ class CourseSectionEntity(object):
         return section_id
 
     @classmethod
-    def update_course_section(cls, section_id, new_course_section):
+    def update_course_section(cls, section_id, new_course_section, errors):
 
         course_sections = CourseSectionEntity.get_course_sections_for_user()
 
@@ -333,9 +344,14 @@ class CourseSectionEntity(object):
         course_sections[section_id] = course_section
 
         user = users.get_current_user()
+        if not user:
+            errors.append('Unable to update course section. User not found.')
+            return False
+
         teacher = Teacher.get_teacher_by_user_id(user.user_id())
 
         if not teacher:
+            errors.append('Unable to update course section. Teacher Entity not found.')
             return False
 
         teacher.sections = transforms.dumps(course_sections, {})

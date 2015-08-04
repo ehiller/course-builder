@@ -144,6 +144,8 @@ StudentDetailTable.prototype = {
  */
 function UnitList() {
   this._unitLookupByIdTable = {};
+  this._studentName = '';
+  this._studentEmail = '';
   this._xsrfToken = null;
 }
 
@@ -155,11 +157,12 @@ UnitList.prototype = {
    * @param callback {function} A zero-args callback which is called when the
    *     unit list has been loaded.
    */
-  load: function(callback) {
+  load: function(callback, param) {
     var that = this;
     $.ajax({
       type: 'GET',
       url: 'rest/modules/teacher_dashboard/student_progress',
+      data: {'student': param},
       dataType: 'text',
       success: function(data) {
         that._onLoad(callback, data);
@@ -177,6 +180,20 @@ UnitList.prototype = {
   getUnitById: function(id) {
     return this._unitLookupByIdTable[id];
   },
+
+  /**
+   * @return {string} The student name
+   */
+   getStudentName: function () {
+    return this._studentName;
+   },
+
+   /**
+   * @return {string} The student email
+   */
+   getStudentEmail: function () {
+    return this._studentEmail;
+   },
 
   /**
    * Iterate over the unit in the list.
@@ -208,7 +225,9 @@ UnitList.prototype = {
 
   _updateFromPayload: function(payload) {
     var that = this;
-    var unitList = payload['unit_list'];
+    var unitList = payload['units'];
+    _studentName = payload['student_name'];
+    _studentEmail = payload['student_email'];
 
     this._unitLookupByIdTable = [];
     $.each(unitList, function() {
@@ -216,3 +235,7 @@ UnitList.prototype = {
     });
   },
 };
+
+
+window.UnitList = UnitList;
+window.StudentDetailTable = StudentDetailTable;

@@ -167,10 +167,10 @@ class TeacherHandler(dashboard.DashboardHandler):
 
         students = []
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
-        for course_section_key in course_sections:
-            for student_key in course_sections[course_section_key].students:
-                if not course_sections[course_section_key].students[student_key] in students:
-                    students.append(course_sections[course_section_key].students[student_key])
+        for course_section in course_sections.values():
+            for student in course_section.students.values():
+                if not student in students:
+                    students.append(student)
 
         if student_email:
             student = Student.get_by_email(student_email)
@@ -200,9 +200,22 @@ class TeacherHandler(dashboard.DashboardHandler):
         template_values = {}
         template_values['add_student_xsrf_token'] = crypto.XsrfTokenManager.create_xsrf_token(CourseSectionRestHandler.XSRF_TOKEN)
 
+        units = self.get_course().get_units()
+        units_filtered = filter(lambda x: x.type == 'U', units)
+        template_values['units'] = units_filtered
+
         course_section_id = self.request.get('section')
 
         course_section = teacher_entity.CourseSectionEntity.get_course_for_user(course_section_id)
+
+        if course_section.students and len(course_section.students) > 0:
+            for student in course_section.students.values():
+                student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[
+                    'email']), self.get_course())
+                student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[
+                    'email']), self.get_course())
+
+        template_values['students_json'] = transforms.dumps(course_section.students, {})
 
         if course_section:
             template_values['section'] = course_section
@@ -232,10 +245,14 @@ class TeacherHandler(dashboard.DashboardHandler):
         #ehiller - check if the teacher already exists
         teacher = teacher_entity.Teacher.get_by_email(email)
 
+        alerts = []
+
         if teacher:
             template_values = {}
-            template_values['error_message'] = 'Teacher already registered'
+            alerts.append('Teacher already registered')
+
             template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+            template_values['alert_messages'] = '\n'.join(alerts)
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
@@ -247,9 +264,11 @@ class TeacherHandler(dashboard.DashboardHandler):
                 'teacher_reg'
             )
         else:
-            teacher_entity.Teacher.add_new_teacher_for_user(email, school, '')
+            teacher_entity.Teacher.add_new_teacher_for_user(email, school, '', alerts)
 
             template_values = {}
+
+            template_values['alert_messages'] = '\n'.join(alerts)
             template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
@@ -264,8 +283,32 @@ class TeacherHandler(dashboard.DashboardHandler):
 
 class StudentProgressTracker(object):
 
-     @classmethod
-     def get_detailed_progress(self, student, course):
+    @classmethod
+    def get_unit_completion(cls, student, course):
+        tracker = course.get_progress_tracker()
+
+        progress = tracker.get_or_create_progress(student)
+
+        return tracker.get_unit_percent_complete(student)
+
+    @classmethod
+    def get_overall_progress(cls, student, course):
+        tracker = course.get_progress_tracker()
+
+        progress = tracker.get_or_create_progress(student)
+
+        unit_completion = tracker.get_unit_percent_complete(student)
+
+        course_completion = 0
+        for unit_completion_value in unit_completion.values():
+            course_completion += unit_completion_value
+
+        course_completion = (course_completion / len(unit_completion)) * 100
+
+        return course_completion
+
+    @classmethod
+    def get_detailed_progress(cls, student, course):
         units = []
 
         tracker = course.get_progress_tracker()
@@ -285,16 +328,15 @@ class StudentProgressTracker(object):
 
             if unit.unit_id in unit_completion:
                 lessons = course.get_lessons(unit.unit_id)
-                lesson_status = tracker.get_lesson_progress(student, unit.unit_id)
+                lesson_status = tracker.get_lesson_progress(student, unit.unit_id, progress)
                 lesson_progress = []
                 for lesson in lessons:
                     lesson_progress.append({
                         'lesson_id': lesson.lesson_id,
                         'title': lesson.title,
-                        'completion': lesson_status[lesson.lesson_id]['activity'],
+                        'completion': lesson_status[lesson.lesson_id]['html'],
                     })
                     activity_status = tracker.get_activity_status(progress, unit.unit_id, lesson.lesson_id)
-                    logging.info('Barok >>>>>>>>>>>>>>> Lesson has activities: %s', lesson_status[lesson.lesson_id]['has_activity'])
                 units.append({
                     'unit_id': unit.unit_id,
                     'title': unit.title,
@@ -324,7 +366,7 @@ class StudentProgressRestHandler(BaseRESTHandler):
             transforms.send_json_response(self, 401, 'Access denied.', {})
             return
 
-        key = self.request.get('key')
+        key = self.request.get('student')
 
         student = Student.get_by_email(key)
         course = self.get_course()
@@ -333,7 +375,8 @@ class StudentProgressRestHandler(BaseRESTHandler):
 
         payload_dict = {
             'units': units,
-            'student': student
+            'student_name': student.name,
+            'student_email': student.email
         }
 
         transforms.send_json_response(
@@ -432,6 +475,8 @@ class CourseSectionRestHandler(BaseRESTHandler):
                     student_info['user_id'] = student.user_id
                     students[student.user_id] = student_info
 
+            #sorted_students = sorted(students.values(), key=lambda k: (k['name']))
+
             if python_dict.get('name') != None:
                 new_course_section.section_name = python_dict.get('name')
             if python_dict.get('active') != None:
@@ -444,20 +489,29 @@ class CourseSectionRestHandler(BaseRESTHandler):
             course_section = teacher_entity.CourseSectionDTO.build(
                 new_course_section.section_name, new_course_section.section_description,
                 new_course_section.is_active, students, new_course_section.section_year)
-            teacher_entity.CourseSectionEntity.update_course_section(key, course_section)
+            teacher_entity.CourseSectionEntity.update_course_section(key, course_section, errors)
         else:
             course_section = teacher_entity.CourseSectionDTO.build(
                 python_dict.get('name'), python_dict.get('description'), python_dict.get('active'), {},
                 python_dict.get('year'))
-            key_after_save = teacher_entity.CourseSectionEntity.add_new_course_section(key, course_section)
+            key_after_save = teacher_entity.CourseSectionEntity.add_new_course_section(key, course_section, errors)
 
         if errors:
-            self.validation_error('\n'.join(errors), key=key)
+            self.validation_error('\n'.join(errors), key=key_after_save)
             return
+
+        section = teacher_entity.CourseSectionEntity.get_course_for_user(key_after_save)
+        if section:
+            if section.students and len(section.students) > 0:
+                for student in section.students.values():
+                    student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[
+                        'email']), self.get_course())
+                    student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[
+                        'email']), self.get_course())
 
         payload_dict = {
             'key': key_after_save,
-            'section': teacher_entity.CourseSectionEntity.get_course_for_user(key_after_save),
+            'section': section,
             'section_list': teacher_entity.CourseSectionEntity.get_course_sections_for_user()
         }
 
@@ -545,6 +599,8 @@ def notify_module_enabled():
 
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/popup.js')
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/course_section_analytics.js')
 
     dashboard.DashboardHandler.EXTRA_CSS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/css/student_list.css')

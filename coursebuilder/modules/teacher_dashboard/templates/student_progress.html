@@ -1,0 +1,47 @@
+<link rel="stylesheet" href="../resources/css/student_progress.css" type="text/css">
+<link rel="stylesheet" href="../resources/css/view.css" type="text/css">
+
+<div style="clear: both; padding-top: 2px;">
+            <h3>Students (2)</h3>
+        </div>
+
+        <p class="description">View your student's progress here.</p>
+
+<div class="student-progress">
+    <div class="row">
+        <div class="left-matter header">
+            <div class="name">Student Name</div>
+        </div>
+        <div class="header">
+            <div class="name">Percent Complete</div>
+        </div>
+    </div>
+    <ol class="sl-students">
+        <li data-unit-id="1">
+            <div class="row student">
+                <div class="left-matter">First Cell</div>
+                <div class="percent-completed">
+                    <progress value=".1">
+                        <!-- Browsers that support the progress tag will ignore this div -->
+                        <div class="progress-bar">
+                            <span style="width: 10%;">Progress: 10%</span>
+                        </div>
+                    </progress>
+                    10%
+                </div>
+            </div>
+            <div class="row student">
+                <div class="left-matter">Second Row</div>
+                <div class="percent-completed">
+                    <progress value=".5">
+                        <!-- Browsers that support the progress tag will ignore this div -->
+                        <div class="progress-bar">
+                            <span style="width: 10%;">Progress: 10%</span>
+                        </div>
+                    </progress>
+                    50%
+                </div>
+            </div>
+        </li>
+    </ol>
+</div>

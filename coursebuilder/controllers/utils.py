@@ -26,6 +26,8 @@ import urlparse
 import jinja2
 import sites
 import webapp2
+import logging
+import json
 
 import appengine_config
 from common import jinja_utils
@@ -102,7 +104,7 @@ CAN_PERSIST_ACTIVITY_EVENTS = ConfigProperty(
         'the number of datastore operations and minimizes the use of Google '
         'App Engine quota. Turn event recording on if you want to analyze '
         'this data.'),
-    False)
+    True)
 
 
 # Date format string for displaying datetimes in UTC.
@@ -1047,16 +1049,40 @@ class StudentProfileHandler(BaseHandler):
             models.LabelDTO.LABEL_TYPE_COURSE_TRACK)
 
         course = self.get_course()
-        units = []
-        for unit in course.get_units():
-            # Don't show assessments that are part of units.
-            if course.get_parent_unit(unit.unit_id):
-                continue
-            units.append({
-                'unit_id': unit.unit_id,
-                'title': unit.title,
-                'labels': list(course.get_unit_track_labels(unit)),
-                })
+        tracker = course.get_progress_tracker()
+        units = tracker.get_detailed_progress(student,course)
+        # progress = tracker.get_or_create_progress(student)
+        # unit_completion = tracker.get_unit_percent_complete(student)
+        #
+        # # for unit in course.get_units():
+        # #     if course.get_parent_unit(unit.unit_id):
+        # #         continue
+        # #     if unit.unit_id in unit_completion:
+        # #        # logging.info('Barok >>>>>>>>>>>>>>> percent completion unit_id = %s: %s', unit.unit_id, unit_completion[unit.unit_id])
+        # for unit in course.get_units():
+        #     # Don't show assessments that are part of units.
+        #     if course.get_parent_unit(unit.unit_id):
+        #         continue
+        #
+        #     if unit.unit_id in unit_completion:
+        #         lessons = course.get_lessons(unit.unit_id)
+        #         lesson_status = tracker.get_lesson_progress(student, unit.unit_id)
+        #         lesson_progress = []
+        #         for lesson in lessons:
+        #             lesson_progress.append({
+        #                 'lesson_id': lesson.lesson_id,
+        #                 'title': lesson.title,
+        #                 'completion': lesson_status[lesson.lesson_id]['activity'],
+        #             })
+        #             activity_status = tracker.get_activity_status(progress, unit.unit_id, lesson.lesson_id)
+        #             logging.info('Barok >>>>>>>>>>>>>>> Lesson has activities: %s', lesson_status[lesson.lesson_id]['has_activity'])
+        #         units.append({
+        #             'unit_id': unit.unit_id,
+        #             'title': unit.title,
+        #             'labels': list(course.get_unit_track_labels(unit)),
+        #             'completion': unit_completion[unit.unit_id],
+        #             'lessons': lesson_progress,
+        #             })
 
         name = student.name
         profile = student.profile
@@ -1089,6 +1115,12 @@ class StudentProfileHandler(BaseHandler):
             extra_student_data.append(data_provider(self, student, course))
         self.template_value['extra_student_data'] = extra_student_data
 
+
+        # unit_status = tracker.get_unit_status(progress, 2)
+        # self.template_value['activity_score'] = unit_status
+        # self.template_value['lessons'] = lessons
+        # unit_completion_dict = tracker.get_unit_percent_complete(student)
+        # self.template_value['unit_progress'] = unit_completion_dict
         self.render('student_profile.html')
 
 

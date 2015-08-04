@@ -1,0 +1,94 @@
+{% if students %}
+    <div style="margin-bottom: 15px;">
+        <label>Please enter a student email: </label>
+        <input id="students_dropdown">
+    </div>
+
+    <script>
+         $(document).ready(function(){
+            var data = [{% for student in students%} "{{ student['email'] }}" {% if not loop.last %},{% endif
+     %}{% endfor %} ];
+            $("#students_dropdown").autocomplete({
+                source: data,
+                select: function (a, b) {
+                    var unitList = new UnitList();
+
+                    var unitListLoaded = $.Deferred(function(def) {
+                      unitList.load(function() {
+                        def.resolve()
+                      }, b.item.value);
+                    });
+                    $.when(unitListLoaded).then(function() {
+                      var studentDetailTable = new StudentDetailTable(unitList);
+                      $('.student-detail-table').remove('tbody');
+                      studentDetailTable._buildBody().appendTo('.student-detail-table');
+
+                      $('.student-name').text(unitList.getStudentName());
+                      $('.student-email').text(unitList.getStudentEmail());
+                    });
+
+                    //  $('.student-name').text('
+                }
+            });
+        });
+    </script>
+{% endif %}
+
+{% if student %}
+
+    <h3>Student Dashboard for {{ student.name }}</h3>
+
+    <div class="student-detail" style="margin: 5px;">
+        <div style="margin: 3px;">
+            <label class="data student-email">{{student.email}}</label>
+        </div>
+    </div>
+
+    <table class="student-detail-table" style="margin-top: 15px;">
+      <colgroup>
+        <col style="width: 10%">
+        <col>
+      </colgroup>
+
+        <tr>
+            {# I18N: Table header for the student's assessment scores. #}
+            <th class="expand-one" align="left" colspan=2>
+                {{ gettext('Unit Completion') }}
+            </th>
+        </tr>
+
+      {% for unit in units %}
+        <tr class="content-one {{unit['unit_id']}} unit_title">
+          <th style="cursor:pointer;color:blue" align="left">&nbsp;&nbsp;&nbsp;{{ unit['title'] }}</th>
+          <td>
+              <span id="unit-completion-{{unit['title']}}">{{ unit['completion'] }}</span>
+          </td>
+        </tr>
+        {% for lesson in unit['lessons'] %}
+        <tr class="content-one {{unit['unit_id']}}-lessons">
+            <th align="left">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ lesson['title'] }}</th>
+            <td>
+                <span id="lesson-completion-{{unit['title']}}">{{ lesson['completion'] }}</span>
+            </td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+
+      {% for unit in units %}
+        <script>
+            $('.{{unit['unit_id']}}').click(function(){
+                $('.{{unit['unit_id']}}-lessons').slideToggle('fast');
+            });
+        </script>
+      {% endfor %}
+
+      {% for header, value in extra_student_data %}
+        {% if header or value %}
+          <tr>
+            <th align="left">{{ header }}</th>
+            <td>{{ value }}</td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </table>
+{% endif %}

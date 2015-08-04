@@ -1,11 +1,29 @@
 <div name="course_section_registration">
+    {% if error_message %}
+        <h2>Errors</h2>
+        {{ error_message }}
+        <br />
+        <br />
+    {% endif %}
+
+    {% if course_sections %}
+        <ul>
+            {% for course_section_id in course_sections %}
+                <li>{{ course_sections[course_section_id].section_name }}
+                    <a href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&course_section={{course_section_id}}">Edit</a>
+                    <a href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=course_reg&tab_action=add_students&course_section={{course_section_id}}">Add Students</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
     <form action="/sample/modules/teacher_dashboard?action=course_section_reg&tab=course_section_reg" method='post'>
         <input type="hidden" name="action" value="course_section_reg" />
         <input type="hidden" name="xsrf_token" value="{{ course_section_reg_xsrf_token|escape }}">
 
         <div name="course_name">
             <label name="course_name_lbl">Enter Course Name:</label>
-            <input type="text" name="course_name_txt" value="My Course" />
+            <input type="text" name="section_name" value="{% if section_name %} {{section_name}} {% endif %}" />
         </div>
 
         <div name="course_date">
@@ -19,13 +37,14 @@
         </div>
 
         <div name="course_active">
-            <input type="checkbox" name="active_chk" value="" text="Course Active" checked />
+            <input type="checkbox" name="is_active" value="True" text="Course Active" checked />
             <label name="active_lbl">Course Active</label>
         </div>
 
         <div name="course_description">
             <label name="course_description_lbl">Course Description:</label>
-            <input type="text" name="course_description_txt" value="Enter a description." />
+            <input type="text" name="section_description"
+                   value="{% if section_description %} {{section_description}} {% endif %}" />
         </div>
 
         <input type="submit" name="course_section_registration_btn" value="Submit" />

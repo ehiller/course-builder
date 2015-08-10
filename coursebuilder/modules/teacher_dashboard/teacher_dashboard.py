@@ -136,7 +136,7 @@ class TeacherHandler(dashboard.DashboardHandler):
 
         register_tab('sections', 'Sections', TeacherHandler)
         register_tab('student_detail', 'Student Dashboard', TeacherHandler)
-        register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
+        register_tab('teacher_reg', 'Teacher Workspace', TeacherHandler)
 
     def get_teacher_dashboard(self):
         in_tab = self.request.get('tab') or self.DEFAULT_TAB
@@ -168,13 +168,13 @@ class TeacherHandler(dashboard.DashboardHandler):
         students = []
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
         for course_section in course_sections.values():
-            for student in course_section.students.values():
-                if not student in students:
-                    students.append(student)
+            for student_in_section in course_section.students.values():
+                if not student_in_section in students:
+                    students.append(student_in_section)
 
+        student = None
         if student_email:
             student = Student.get_by_email(student_email)
-
 
         if (student):
             course = self.get_course()
@@ -204,6 +204,19 @@ class TeacherHandler(dashboard.DashboardHandler):
         units_filtered = filter(lambda x: x.type == 'U', units)
         template_values['units'] = units_filtered
 
+        lessons = {}
+        for unit in units_filtered:
+            unit_lessons = self.get_course().get_lessons(unit.unit_id)
+            unit_lessons_filtered = []
+            for lesson in unit_lessons:
+                unit_lessons_filtered.append({
+                    'title': lesson.title,
+                    'unit_id': lesson.unit_id,
+                    'lesson_id': lesson.lesson_id
+                })
+            lessons[unit.unit_id] = unit_lessons_filtered
+        template_values['lessons'] = transforms.dumps(lessons, {})
+
         course_section_id = self.request.get('section')
 
         course_section = teacher_entity.CourseSectionEntity.get_course_for_user(course_section_id)
@@ -214,6 +227,8 @@ class TeacherHandler(dashboard.DashboardHandler):
                     'email']), self.get_course())
                 student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[
                     'email']), self.get_course())
+                student['detailed_course_completion'] = StudentProgressTracker.get_detailed_progress(
+                    Student.get_by_email(student['email']), self.get_course())
 
         template_values['students_json'] = transforms.dumps(course_section.students, {})
 
@@ -231,6 +246,9 @@ class TeacherHandler(dashboard.DashboardHandler):
     def get_teacher_reg(self):
         template_values = {}
         template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+
+        template_values['teachers'] = teacher_entity.Teacher.get_all_teachers_for_course()
+
         main_content = self.get_template(
             'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
@@ -239,8 +257,14 @@ class TeacherHandler(dashboard.DashboardHandler):
             'main_content': jinja2.utils.Markup(main_content)})
 
     def post_teacher_reg(self):
-        email = self.request.get('email')
+        email = self.request.get('email').strip()
         school = self.request.get('school')
+
+        active = self.request.get('active-teacher')
+        if active == 'on' or len(active) > 0:
+            active = True
+        else:
+            active = False
 
         #ehiller - check if the teacher already exists
         teacher = teacher_entity.Teacher.get_by_email(email)
@@ -249,9 +273,32 @@ class TeacherHandler(dashboard.DashboardHandler):
 
         if teacher:
             template_values = {}
-            alerts.append('Teacher already registered')
 
             template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+
+            sections = {}
+            can_inactivate = True
+            if active == False:
+                if teacher.sections:
+                    course_sections_decoded = transforms.loads(teacher.sections)
+
+                    for course_section_key in course_sections_decoded:
+                        course_section = teacher_entity.CourseSectionEntity(course_sections_decoded[course_section_key])
+                        sections[course_section.section_id] = course_section
+
+                    for section in sections.values():
+                        if section.is_active:
+                            can_inactivate = False
+
+            if not can_inactivate and not active:
+                alerts.append('Cannot deactivate teacher. Teacher still has active courses')
+
+            if can_inactivate:
+                teacher_entity.Teacher.update_teacher_for_user(email, school, active, '', alerts)
+
+            if len(alerts) == 0:
+                alerts.append('Teacher was successfully updated')
+
             template_values['alert_messages'] = '\n'.join(alerts)
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
@@ -260,8 +307,7 @@ class TeacherHandler(dashboard.DashboardHandler):
                 'page_title': self.format_title('Teacher Dashboard'),
                 'main_content': jinja2.utils.Markup(main_content)
                 },
-                'teacher_dashboard',
-                'teacher_reg'
+                'teacher_dashboard'
             )
         else:
             teacher_entity.Teacher.add_new_teacher_for_user(email, school, '', alerts)
@@ -277,8 +323,7 @@ class TeacherHandler(dashboard.DashboardHandler):
                 'page_title': self.format_title('Teacher Dashboard'),
                 'main_content': jinja2.utils.Markup(main_content)
                 },
-                'teacher_dashboard',
-                'teacher_reg'
+                'teacher_dashboard'
             )
 
 class StudentProgressTracker(object):
@@ -308,7 +353,7 @@ class StudentProgressTracker(object):
         return course_completion
 
     @classmethod
-    def get_detailed_progress(cls, student, course):
+    def get_detailed_progress(cls, student, course, include_assessments = False):
         units = []
 
         tracker = course.get_progress_tracker()
@@ -316,12 +361,11 @@ class StudentProgressTracker(object):
         progress = tracker.get_or_create_progress(student)
         unit_completion = tracker.get_unit_percent_complete(student)
 
-        # for unit in course.get_units():
-        #     if course.get_parent_unit(unit.unit_id):
-        #         continue
-        #     if unit.unit_id in unit_completion:
-        #        # logging.info('Barok >>>>>>>>>>>>>>> percent completion unit_id = %s: %s', unit.unit_id, unit_completion[unit.unit_id])
-        for unit in course.get_units():
+        course_units = course.get_units()
+        if not include_assessments:
+            course_units = filter(lambda x: x.type == 'U', course_units)
+
+        for unit in course_units:
             # Don't show assessments that are part of units.
             if course.get_parent_unit(unit.unit_id):
                 continue

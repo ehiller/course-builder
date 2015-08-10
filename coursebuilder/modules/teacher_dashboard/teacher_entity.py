@@ -38,6 +38,7 @@ class Teacher(BaseEntity):
     name = db.StringProperty(indexed=False)
     additional_fields = db.TextProperty(indexed=False)
     is_enrolled = db.BooleanProperty(indexed=False)
+    is_active = db.BooleanProperty(indexed=False)
 
     # Additional field for teachers
     sections = db.TextProperty(indexed=False)
@@ -95,6 +96,10 @@ class Teacher(BaseEntity):
         TeacherProfileDAO.add_new_teacher_for_user(email, school, additional_fields, alerts)
 
     @classmethod
+    def update_teacher_for_user(cls, email, school, active, additional_fields, alerts):
+        TeacherProfileDAO.update_teacher_for_user(email, school, active, additional_fields, alerts)
+
+    @classmethod
     def get_by_email(cls, email):
         return Teacher.get_by_key_name(email.encode('utf8'))
 
@@ -139,6 +144,20 @@ class Teacher(BaseEntity):
         else:
             return None
 
+    @classmethod
+    def get_all_teachers_for_course(cls):
+        """Returns all enrolled teachers or None."""
+
+        teachers = []
+
+        for teacher in TeacherProfileDAO.get_all_iter():
+            teachers.append(teacher)
+
+        if not teachers:
+            return None
+
+        return teachers
+
     def get_key(self, transform_fn=None):
         """Gets a version of the key that uses user_id for the key name."""
         if not self.user_id:
@@ -154,6 +173,7 @@ class TeacherProfileDAO(object):
     """All access and mutation methods for PersonalProfile and Teacher."""
 
     TARGET_NAMESPACE = appengine_config.DEFAULT_NAMESPACE_NAME
+    ENTITY = Teacher
 
     # Each hook is called back after update() has completed without raising
     # an exception.  Arguments are:
@@ -189,11 +209,12 @@ class TeacherProfileDAO(object):
         student_by_email = Student.get_by_email(email)
 
         if not student_by_email:
-            alerts.append('No student exists associated with that email')
+            alerts.append('This email is not registered as a student for this course')
             return None
 
+        # assume a new teacher is active by default
         teacher = cls._add_new_teacher_for_user(
-            student_by_email.user_id, email, student_by_email.name, school, additional_fields)
+            student_by_email.user_id, email, student_by_email.name, school, True, additional_fields)
 
         if teacher:
             alerts.append('Teacher was successfully registered')
@@ -201,10 +222,23 @@ class TeacherProfileDAO(object):
         return teacher
 
     @classmethod
+    def update_teacher_for_user(cls, email, school, active, additional_fields, errors):
+        teacher = Teacher.get_by_email(email)
+
+        if not teacher:
+            errors.append('No teacher exists associated with that email.')
+            return None
+
+        teacher = cls._update_teacher_for_user_in_txn(teacher.user_id, email, teacher.name, school, active,
+                                                                                      additional_fields, errors)
+
+        return teacher
+
+    @classmethod
     def _add_new_teacher_for_user(
-            cls, user_id, email, nick_name, school, additional_fields):
+            cls, user_id, email, nick_name, school, active, additional_fields):
         teacher = cls._add_new_teacher_for_user_in_txn(
-            user_id, email, nick_name, school, additional_fields)
+            user_id, email, nick_name, school, active, additional_fields)
         #ehiller - may need to add hooks for adding a teacher
         #common_utils.run_hooks(cls.ADD_STUDENT_POST_HOOKS, student)
         return teacher
@@ -212,7 +246,7 @@ class TeacherProfileDAO(object):
     @classmethod
     @db.transactional(xg=True)
     def _add_new_teacher_for_user_in_txn(
-            cls, user_id, email, nick_name, school, additional_fields):
+            cls, user_id, email, nick_name, school, active, additional_fields):
         """Create new teacher."""
 
         # create profile if does not exist
@@ -235,12 +269,58 @@ class TeacherProfileDAO(object):
         teacher.additional_fields = additional_fields
         teacher.school = school
         teacher.name = nick_name
+        teacher.is_active = active
+        teacher.email = email
 
         # put both
         #cls._put_profile(profile)
         teacher.put()
 
         return teacher
+
+    @classmethod
+    def _update_teacher_for_user_in_txn(cls, user_id, email, nick_name, school, active, additional_fields, errors):
+        #probably a better idea to get by user_id since the email may have been changed
+        teacher = Teacher.get_teacher_by_user_id(user_id)
+        if not teacher:
+            errors.append('No teacher exists associated with that email')
+
+        #not actually letting them update their email, used as key
+        teacher.name = nick_name
+        teacher.school = school
+        teacher.additional_fields = additional_fields
+        teacher.is_active = active
+
+        teacher.put()
+
+        return teacher
+
+    @classmethod
+    def get_all_iter(cls):
+        """Return a generator that will produce all DTOs of a given type.
+
+        Yields:
+          A DTO for each row in the Entity type's table.
+        """
+
+        prev_cursor = None
+        any_records = True
+        while any_records:
+            any_records = False
+            query = cls.ENTITY.all().with_cursor(prev_cursor)
+            for entity in query.run():
+                any_records = True
+                teacher = Teacher()
+                teacher.email = entity.email
+                teacher.user_id = entity.user_id
+                teacher.name = entity.name
+                teacher.is_active = entity.is_active
+                teacher.school = entity.school
+                if entity.sections:
+                    teacher.sections = entity.sections
+
+                yield teacher
+            prev_cursor = query.cursor()
 
 
 class CourseSectionEntity(object):

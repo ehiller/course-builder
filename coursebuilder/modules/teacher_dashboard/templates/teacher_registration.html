@@ -22,12 +22,93 @@
         <div style="max-width: 350px;">
             <label for="email" style="width: 100%;">Email:</label><br />
             <input id="email" type="text" name="email" size="35">
+
+            <input id="active-teacher" style="margin-left: 15px;" disabled checked type="checkbox"
+                   name="active-teacher" /><label>Active
+        </label>
+
             <br /><br />
             <label for="school" style="width: 100%; margin-top: 15px;">School:</label>
             <br />
             <input id="school" type="text" name="school" size="35">
         </div>
         <br />
-        <input style="margin: 10px 0px 10px 0px; " class="gcb-button" type="submit" value="Register" />
+        <input id="submit-teacher-btn" style="margin: 10px 0px 10px 0px; " class="gcb-button" type="submit" value="Register" />
     </form>
 </div>
+
+{% if teachers %}
+    <script>
+         $(document).ready(function(){
+            window.teachers = [
+                {% for teacher in teachers%}
+                    {
+                       email:  "{{ teacher.email }}",
+                       school: "{{ teacher.school }}",
+                       name: "{{ teacher.name }}",
+                       is_active: "{{ teacher.is_active }}",
+                    } {% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
+
+            $('.edit-teacher').click(function () {
+                emailChanged(this.value);
+            });
+
+            $('#email').change(function() {
+                emailChanged(this.value.trim());
+            });
+
+            function emailChanged(email) {
+                for (var i = 0; i < window.teachers.length; i++) {
+                    if (email === window.teachers[i].email.trim()) {
+                        $('#submit-teacher-btn').attr('value', 'Update');
+
+                        $('#email').val(email);
+                        $('#name').val(window.teachers[i].name);
+                        $('#school').val(window.teachers[i].school);
+
+                        if (window.teachers[i].is_active === 'True') {
+                            $('#active-teacher').prop('checked', true);
+                        }
+                        else {
+                            $('#active-teacher').prop('checked', false);
+                        }
+
+                        $('#active-teacher').prop('disabled', false);
+
+                        return;
+                    }
+                }
+
+                $('#submit-teacher-btn').attr('value', 'Register');
+                $('#active-teacher').prop('disabled', true);
+            }
+        });
+    </script>
+
+<h3 style="margin-top: 20px;">Registered Teachers</h3>
+<div class="registered-list" style="margin-top: 15px;">
+    <table>
+
+        <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>School</th>
+            <th>Status</th>
+        </tr>
+
+        {% for teacher in teachers %}
+            <tr>
+                <td>{{ teacher.email }}
+                    <button class="icon md md-mode-edit reveal-on-hover edit-teacher"
+                              value="{{ teacher.email }}"></button></td>
+                <td>{{ teacher.name }}</td>
+                <td>{{ teacher.school }}</td>
+                <td>{{ teacher.is_active }}</td>
+            </tr>
+        {% endfor %}
+
+    </table>
+</div>
+{% endif %}

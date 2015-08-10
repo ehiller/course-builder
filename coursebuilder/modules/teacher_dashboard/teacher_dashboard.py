@@ -10,31 +10,21 @@ __author__ = 'ehiller@css.edu'
 #       Section Gradebook - show course completion
 #       More to be added
 
-import logging
-import jinja2
 import os
-import operator
 
+import jinja2
 import appengine_config
 import teacher_entity
-
-from google.appengine.api import users
-
 from common import tags
 from common import crypto
-
-from models import courses
 from models import custom_modules
-from models import models
 from models import roles
 from models import transforms
 from models.models import Student
-from models.progress import UnitLessonCompletionTracker
-
 from controllers.utils import BaseRESTHandler
-
 from common.resource import AbstractResourceHandler
 from common import schema_fields
+
 
 #since we are extending the dashboard, probably want to dashboard stuff
 from modules.dashboard import dashboard
@@ -68,6 +58,9 @@ ACCESS_PEERREVIEW_PERMISSION_DESCRIPTION = 'Can access the Peer Review Dashboard
 ACCESS_SKILLMAP_PERMISSION = 'can_access_skill_map'
 ACCESS_SKILLMAP_PERMISSION_DESCRIPTION = 'Can access the Skill Map Dashboard'
 
+ACCESS_TEACHER_DASHBOARD_PERMISSION = 'can_access_teacher_dashboard'
+ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION = 'Can access the Teacher Dashboard'
+
 #setup custom module for, needs to be referenced later
 custom_module = None
 
@@ -91,8 +84,8 @@ class BaseDashboardExtension(object):
         def get_action(handler):
             cls(handler).render()
         dashboard.DashboardHandler.add_custom_get_action(cls.ACTION, get_action)
-        #dashboard.DashboardHandler.map_action_to_permission(
-        #    'get_%s' % cls.ACTION, ACCESS_PERMISSION)
+        dashboard.DashboardHandler.map_action_to_permission(
+            'get_%s' % cls.ACTION, ACCESS_TEACHER_DASHBOARD_PERMISSION)
 
     @classmethod
     def unregister(cls):
@@ -117,8 +110,8 @@ class TeacherHandler(dashboard.DashboardHandler):
 
     XSRF_TOKEN_NAME = ''
 
-    #def __init__(self, handler):
-    #    super(TeacherHandler, self).__init__(handler)
+    def __init__(self, handler):
+        super(TeacherHandler, self).__init__(handler)
 
     @classmethod
     def register_tabs(cls):
@@ -596,6 +589,9 @@ def notify_module_enabled():
         ACCESS_PEERREVIEW_PERMISSION, ACCESS_PEERREVIEW_PERMISSION_DESCRIPTION)
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_SKILLMAP_PERMISSION, ACCESS_SKILLMAP_PERMISSION_DESCRIPTION)
+    dashboard.DashboardHandler.add_external_permission(
+        ACCESS_TEACHER_DASHBOARD_PERMISSION, ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION)
+
 
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/popup.js')
@@ -622,6 +618,16 @@ def notify_module_enabled():
     #TeacherHandler.register()
 
     #hooks would go here, none needed for a basic module. yet....
+    # dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
+
+    dashboard.DashboardHandler.add_nav_mapping(
+        TeacherHandler.ACTION, 'teacher_dashboard')
+    dashboard.DashboardHandler.add_external_permission(
+        ACCESS_TEACHER_DASHBOARD_PERMISSION, ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION)
+    
+
+
+
 
 
 def register_module():
@@ -648,3 +654,6 @@ def register_module():
         notify_module_enabled=notify_module_enabled)
 
     return custom_module
+
+
+

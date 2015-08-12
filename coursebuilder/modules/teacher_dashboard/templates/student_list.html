@@ -2,7 +2,9 @@
 <link rel="stylesheet" href="../resources/css/student_progress.css" type="text/css">
 
 
-<!-- setting up global variable for student completion values -->
+<!-- setting up global variable for student completion values
+     and the lesson dropdown
+-->
 <script type="text/javascript">
     {% if section %}
         {% if section.students %}
@@ -73,11 +75,14 @@
                 <script>
                     $(function() {
                         $(".add-students").click(function() {
+                            //activates add students popup, a global object defined in this module's popup.js
                             var addStudentsPopup = new AddStudentsPopup('{{ section.section_id }}',
                             '{{add_student_xsrf_token}}');
+
+                            //pass a callback function into the popup's open, will get called if save is successful
                             addStudentsPopup.open(function (students) {
                                 var table = $(document).find('.student-list-table');
-                                $('.student-list-table tr:gt(0)').remove();
+                                $('.student-list-table tr:gt(0)').remove(); //remove all but header row
                                 addStudentsPopup.rebuildStudentsTable(students, table, $('.unit-select'));
                             });
                         })
@@ -96,6 +101,7 @@
 
         <script type="text/javascript">
             $(function() {
+                //handles updating the lesson select options and completion values
                 $('.unit-select').change(function() {
                     var newOptions = [];
                     if (this.value != 'course_completion') {
@@ -121,11 +127,13 @@
                          .attr("value", key.key).text(key.value));
                     });
 
+                    //defined in popup.js
                     RebuildCompletionColumn(window.students, this, $('.lesson-select'));
                 });
             });
             $(function() {
                 $('.lesson-select').change(function() {
+                    //defined in popup.js
                     RebuildCompletionColumn(window.students, $('.unit-select'), this);
                 });
             });

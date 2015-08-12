@@ -155,7 +155,15 @@
                                        href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student={{ student['email'] }}">View Dashboard</a></td>
                                 <td class="student-name">{{ student['name'] }}</td>
                                 <td class="student-email">{{ student['email'] }}</td>
-                                <td class="student-completion">{{ student['course_completion'] }}%</td>
+                                <td class="student-completion">
+                                    <progress value="{{ student['course_completion'] }}">
+                                        <!-- Browsers that support the progress tag will ignore this div -->
+                                        <div class="progress-bar">
+                                            <span style="width: {{ student['course_completion'] }}%;">Progress: {{ student['course_completion'] }}%</span>
+                                        </div>
+                                    </progress>
+                                    &nbsp;
+                                    {{ student['course_completion'] }}%</td>
                                 <td class="student-lesson-completion">N/A</td>
                                 <td style="display:none;"><input  class="student-id" type="hidden" value="{{ student['user_id'] }}" /></td>
                             </tr>

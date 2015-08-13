@@ -57,25 +57,56 @@ function StudentDetailTable(unitList) {
 
 StudentDetailTable.prototype = {
   _buildRow: function(unit) {
-    var tr = $('<tr class="row"></tr>');
+    var tr = $('<tr class="row ' + unit.unit_id + '"></tr>');
+    tr.click(function() {
+      var unit_id = $(this).find('.unit').data('unit_id');
+      var lesson_class = '.' + unit_id.toString() + '-lesson';
+      $(lesson_class).slideToggle('fast');
+    });
 
     // add unit/lesson name
     var td = $(
-        '<td class="unit">' +
+        '<th class="unit" style="cursor:pointer;color:blue">' +
         '  <span class="unit-name"></span>' +
-        '</td>'
+        '</th>'
     );
-    td.find('.unit-name').text(unit.name);
+    td.find('.unit-name').text(unit.title);
+    td.data('unit_id', unit.unit_id);
     tr.append(td);
 
     // add score
-    var td = $(
+    td = $(
         '<td class="score">' +
         '  <span class="unit-score"></span> ' +
         '</td>'
     );
 
-    td.find('.unit-score').text(unit.score);
+    td.find('.unit-score').text(unit.completion * 100 + '%');
+    tr.append(td);
+
+    return tr;
+  },
+
+  _buildSubRow: function(lesson, unit_id) {
+    var tr = $('<tr class="row ' + unit_id + '-lesson" style="display: none;"></tr>');
+
+    // add unit/lesson name
+    var td = $(
+        '<th class="lesson">' +
+        '  <span class="lesson-name"></span>' +
+        '</th>'
+    );
+    td.find('.lesson-name').text(lesson.title);
+    tr.append(td);
+
+    // add score
+    td = $(
+        '<td class="score">' +
+        '  <span class="lesson-score"></span> ' +
+        '</td>'
+    );
+
+    td.find('.lesson-score').text(lesson.completion / 2 * 100 + '%');
     tr.append(td);
 
     return tr;
@@ -107,8 +138,14 @@ StudentDetailTable.prototype = {
     var i = 0;
     that._unitList.eachUnit(function(unit) {
       var row = that._buildRow(unit);
-      row.addClass( i++ % 2 == 0 ? 'even' : 'odd');
+      //row.addClass( i++ % 2 == 0 ? 'even' : 'odd');
       tbody.append(row);
+
+      for (var j = 0; j < unit.lessons.length; j++)  {
+        var row = that._buildSubRow(unit.lessons[j], unit.unit_id);
+        row.addClass(i++ % 2 == 0 ? 'even' : 'odd');
+        tbody.append(row);
+      }
     });
 
     return tbody;
@@ -226,12 +263,12 @@ UnitList.prototype = {
   _updateFromPayload: function(payload) {
     var that = this;
     var unitList = payload['units'];
-    _studentName = payload['student_name'];
-    _studentEmail = payload['student_email'];
+    that._studentName = payload.student_name;
+    that._studentEmail = payload.student_email;
 
     this._unitLookupByIdTable = [];
     $.each(unitList, function() {
-      that._unitLookupByIdTable[this.id] = this;
+      that._unitLookupByIdTable[this.unit_id] = this;
     });
   },
 };

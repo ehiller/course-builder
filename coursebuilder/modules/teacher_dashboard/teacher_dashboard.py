@@ -3,30 +3,31 @@ __author__ = 'ehiller@css.edu'
 
 # Module to support custom teacher views in CourseBuilder dashboard
 # Views include:
-#       Class Roster - paginated list of students in teacher's section
-#       CourseAdmin/Create Section - page for course admins to add a section for a teacher.
-#           This will create a teacher entity
+#       Section Roster - list of students in section
+#       Sections - list of sections for current user
 #       Student Dashboard - view of a single student's performance in the course
-#       Section Gradebook - show course completion
-#       More to be added
-
-import os
+#       Teacher Workspace - teacher registration and list of all registered teachers
 
 import jinja2
+import os
+
 import appengine_config
 import teacher_entity
+
 from common import tags
 from common import crypto
+
 from models import custom_modules
 from models import roles
 from models import transforms
 from models.models import Student
+
 from controllers.utils import BaseRESTHandler
+
 from common.resource import AbstractResourceHandler
 from common import schema_fields
 
-
-#since we are extending the dashboard, probably want to dashboard stuff
+#since we are extending the dashboard, probably want to include dashboard stuff
 from modules.dashboard import dashboard
 from modules.dashboard import tabs
 
@@ -64,45 +65,22 @@ ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION = 'Can access the Teacher Dashbo
 #setup custom module for, needs to be referenced later
 custom_module = None
 
-class BaseDashboardExtension(object):
-    ACTION = None
-
-    @classmethod
-    def is_readonly(cls, course):
-        return course.app_context.get_environ()[
-                'course'].get('prevent_translation_edits')
-
-    @classmethod
-    def format_readonly_message(cls):
-        pass
-        #return safe_dom.Element('P').add_text(
-        #    'Translation console is currently disabled. '
-        #    'Course administrator can enable it via I18N Settings.')
-
-    @classmethod
-    def register(cls):
-        def get_action(handler):
-            cls(handler).render()
-        dashboard.DashboardHandler.add_custom_get_action(cls.ACTION, get_action)
-        dashboard.DashboardHandler.map_action_to_permission(
-            'get_%s' % cls.ACTION, ACCESS_TEACHER_DASHBOARD_PERMISSION)
-
-    @classmethod
-    def unregister(cls):
-        dashboard.DashboardHandler.remove_custom_get_action(cls.ACTION)
-        dashboard.DashboardHandler.unmap_action_to_permission(
-            'get_%s' % cls.ACTION)
-
-    def __init__(self, handler):
-        """Initialize the class with a request handler.
-
-        Args:
-            handler: modules.dashboard.DashboardHandler. This is the handler
-                which will do the rendering.
-        """
-        self.handler = handler
 
 class TeacherHandler(dashboard.DashboardHandler):
+    """Handler for everything under the Teacher tab in the CourseBuilder dashboard.
+
+    Note:
+        Inherits from the DashboardHandler, makes use of many of those functions to
+        integrate with existing dashboard.
+
+    Attributes:
+        ACTION (str): Value used to handler navigation in the dashboard, top level label.
+        DEFAULT_TAB (str): Default sub-navigation value.
+        URL (str): Path to module from working directory.
+        XSRF_TOKEN_NAME (str): Token used for xsrf security functions.
+
+    """
+
     ACTION = 'teacher_dashboard'
     DEFAULT_TAB = 'sections'
 
@@ -110,13 +88,12 @@ class TeacherHandler(dashboard.DashboardHandler):
 
     XSRF_TOKEN_NAME = ''
 
-    def __init__(self, handler):
-        super(TeacherHandler, self).__init__(handler)
-
     @classmethod
     def register_tabs(cls):
+        """Handles registering all sub-navigation tabs"""
 
         def register_tab(key, label, handler, href=None):
+            """Registers tab using the tab registry"""
             if href:
                 target = '_blank'
             else:
@@ -129,11 +106,14 @@ class TeacherHandler(dashboard.DashboardHandler):
 
         register_tab('sections', 'Sections', TeacherHandler)
         register_tab('student_detail', 'Student Dashboard', TeacherHandler)
-        register_tab('teacher_reg', 'Register Teacher', TeacherHandler)
+        register_tab('teacher_reg', 'Teacher Workspace', TeacherHandler)
 
     def get_teacher_dashboard(self):
+        """Process navigation requests sent to teacher handler. Routers to appropriate function."""
+
         in_tab = self.request.get('tab') or self.DEFAULT_TAB
-        tab_action = self.request.get('tab_action') or None
+        tab_action = self.request.get('tab_action') or None #defined a secondary tab property so I can go load a
+                                                            # separate view in the same tab
 
         if in_tab == 'sections':
             if tab_action == 'roster':
@@ -146,6 +126,7 @@ class TeacherHandler(dashboard.DashboardHandler):
             return self.get_student_dashboard()
 
     def get_sections(self):
+        """Renders Sections view. Javascript handles getting course sections and building the view"""
         main_content = self.get_template(
             'teacher_sections.html', [TEMPLATES_DIR]).render({})
 
@@ -154,20 +135,27 @@ class TeacherHandler(dashboard.DashboardHandler):
             'main_content': jinja2.utils.Markup(main_content)})
 
     def get_student_dashboard(self):
+        """Renders Student Dashboard view.
+
+           Also gets ALL students in ALL course sections for the registered user to
+           build a jQuery autocomplete dropdown on the view.
+        """
 
         student_email = self.request.get('student') or None #email will be in the request if opened from student list
-        # view, otherwise just show dropdown
+                                                            # view, otherwise it will be None
 
+        #need to go through every course section for the current user and get all unique students
         students = []
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
         for course_section in course_sections.values():
-            for student in course_section.students.values():
-                if not student in students:
-                    students.append(student)
+            for student_in_section in course_section.students.values():
+                if not student_in_section in students:
+                    students.append(student_in_section)
 
+        #check to see if we have a student and if we need to get detailed progress
+        student = None
         if student_email:
             student = Student.get_by_email(student_email)
-
 
         if (student):
             course = self.get_course()
@@ -175,14 +163,16 @@ class TeacherHandler(dashboard.DashboardHandler):
         else:
             units = None
 
+        #render the template for the student dashboard view
         main_content = self.get_template(
             'student_detailed_progress.html', [TEMPLATES_DIR]).render(
                 {
-                    'units': units,
-                    'student': student,
-                    'students': students
+                    'units': units, #unit completion
+                    'student': student, #course defined student object, need email and name
+                    'students': students #list of students, names and emails, from a course section student list
                 })
 
+        #call DashboardHandler function to render the page
         self.render_page({
             'page_title': self.format_title('Student Dashboard'),
             'main_content': jinja2.utils.Markup(main_content)
@@ -190,40 +180,76 @@ class TeacherHandler(dashboard.DashboardHandler):
 
 
     def get_roster(self):
+        """Renders the Roster view. Displays all students in a single course section
+
+           Also allows user to add students to a course section
+        """
+
         template_values = {}
         template_values['add_student_xsrf_token'] = crypto.XsrfTokenManager.create_xsrf_token(CourseSectionRestHandler.XSRF_TOKEN)
 
+        #need list of units and lessons for select elements that determine which progress value to display
+        #need a list of units, need the titles, unit ids, types
         units = self.get_course().get_units()
-        units_filtered = filter(lambda x: x.type == 'U', units)
+        units_filtered = filter(lambda x: x.type == 'U', units) #filter out assessments
         template_values['units'] = units_filtered
+
+        #need to get lessons, but only for units that aren't assessments
+        lessons = {}
+        for unit in units_filtered:
+            unit_lessons = self.get_course().get_lessons(unit.unit_id)
+            unit_lessons_filtered = []
+            for lesson in unit_lessons:
+                unit_lessons_filtered.append({
+                    'title': lesson.title,
+                    'unit_id': lesson.unit_id,
+                    'lesson_id': lesson.lesson_id
+                })
+            lessons[unit.unit_id] = unit_lessons_filtered
+        template_values['lessons'] = transforms.dumps(lessons, {}) #passing in JSON to template so it can be used
+                                                                    # in JavaScript
 
         course_section_id = self.request.get('section')
 
         course_section = teacher_entity.CourseSectionEntity.get_course_for_user(course_section_id)
 
+        #need to get progress values for ALL students since we show completion for every student
         if course_section.students and len(course_section.students) > 0:
             for student in course_section.students.values():
                 student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[
                     'email']), self.get_course())
                 student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[
                     'email']), self.get_course())
+                student['detailed_course_completion'] = StudentProgressTracker.get_detailed_progress(
+                    Student.get_by_email(student['email']), self.get_course())
 
+        #passing in students as JSON so JavaScript can handle updating completion values easier
         template_values['students_json'] = transforms.dumps(course_section.students, {})
 
         if course_section:
             template_values['section'] = course_section
 
+        #render student_list.html for Roster view
         main_content = self.get_template(
             'student_list.html', [TEMPLATES_DIR]).render(template_values)
 
+        #DashboardHandler renders the page
         self.render_page({
             'page_title': self.format_title('Student List'),
             'main_content': jinja2.utils.Markup(main_content)})
 
 
     def get_teacher_reg(self):
+        """Renders Teacher Workspace view. Displays form to add or update a teacher
+
+           Also displays all registered teachers.
+        """
+
         template_values = {}
         template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+
+        template_values['teachers'] = teacher_entity.Teacher.get_all_teachers_for_course()
+
         main_content = self.get_template(
             'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
@@ -232,31 +258,72 @@ class TeacherHandler(dashboard.DashboardHandler):
             'main_content': jinja2.utils.Markup(main_content)})
 
     def post_teacher_reg(self):
-        email = self.request.get('email')
+        """Handles form submit for teacher registration"""
+
+        #get values entered on form
+        email = self.request.get('email').strip()
         school = self.request.get('school')
 
-        #ehiller - check if the teacher already exists
+        #getting checkbox value is a little weird, might look different depending on browser
+        active = self.request.get('active-teacher')
+        if active == 'on' or len(active) > 0:
+            active = True
+        else:
+            active = False
+
         teacher = teacher_entity.Teacher.get_by_email(email)
 
+        #keep track of any errors we might want to pass back to the UI
         alerts = []
 
+        #check to see if a teacher already exists
         if teacher:
             template_values = {}
-            alerts.append('Teacher already registered')
 
             template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
+
+            sections = {}
+
+            #don't let the teacher be deactivated if they have active courses
+            can_inactivate = True
+            if active == False:
+                if teacher.sections:
+                    course_sections_decoded = transforms.loads(teacher.sections)
+
+                    for course_section_key in course_sections_decoded:
+                        course_section = teacher_entity.CourseSectionEntity(course_sections_decoded[course_section_key])
+                        sections[course_section.section_id] = course_section
+
+                    for section in sections.values():
+                        if section.is_active:
+                            can_inactivate = False
+
+            #let user know if they can't deactivate, but only if they are trying to deactivate the teacher
+            if not can_inactivate and not active:
+                alerts.append('Cannot deactivate teacher. Teacher still has active courses')
+
+            #go for the update if all is good
+            if can_inactivate:
+                teacher_entity.Teacher.update_teacher_for_user(email, school, active, '', alerts)
+
+            #let user know all is well if save was successful
+            if len(alerts) == 0:
+                alerts.append('Teacher was successfully updated')
+
+            #render teacher_registration.html for view, pass alerts in
             template_values['alert_messages'] = '\n'.join(alerts)
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
+            #DashboardHandler renders the page
             self.render_page({
                 'page_title': self.format_title('Teacher Dashboard'),
                 'main_content': jinja2.utils.Markup(main_content)
                 },
-                'teacher_dashboard',
-                'teacher_reg'
+                'teacher_dashboard'
             )
         else:
+            #go for it if teacher doesn't already exist
             teacher_entity.Teacher.add_new_teacher_for_user(email, school, '', alerts)
 
             template_values = {}
@@ -266,29 +333,33 @@ class TeacherHandler(dashboard.DashboardHandler):
             main_content = self.get_template(
                 'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)
 
+            #DashboardHandler renders the page
             self.render_page({
                 'page_title': self.format_title('Teacher Dashboard'),
                 'main_content': jinja2.utils.Markup(main_content)
                 },
-                'teacher_dashboard',
-                'teacher_reg'
+                'teacher_dashboard'
             )
 
 class StudentProgressTracker(object):
+    """Gets student progress for a given course.
+
+    Note:
+        Gets progress at the unit, lesson, and course levels.
+
+    """
 
     @classmethod
     def get_unit_completion(cls, student, course):
+        """Gets completion progress for all units in a course for a student"""
         tracker = course.get_progress_tracker()
-
-        progress = tracker.get_or_create_progress(student)
 
         return tracker.get_unit_percent_complete(student)
 
     @classmethod
     def get_overall_progress(cls, student, course):
+        """Gets progress at the course level for a student"""
         tracker = course.get_progress_tracker()
-
-        progress = tracker.get_or_create_progress(student)
 
         unit_completion = tracker.get_unit_percent_complete(student)
 
@@ -296,12 +367,14 @@ class StudentProgressTracker(object):
         for unit_completion_value in unit_completion.values():
             course_completion += unit_completion_value
 
+        #return percentages
         course_completion = (course_completion / len(unit_completion)) * 100
 
         return course_completion
 
     @classmethod
-    def get_detailed_progress(cls, student, course):
+    def get_detailed_progress(cls, student, course, include_assessments = False):
+        """Gets unit and lesson completion for in a course for a student"""
         units = []
 
         tracker = course.get_progress_tracker()
@@ -309,12 +382,11 @@ class StudentProgressTracker(object):
         progress = tracker.get_or_create_progress(student)
         unit_completion = tracker.get_unit_percent_complete(student)
 
-        # for unit in course.get_units():
-        #     if course.get_parent_unit(unit.unit_id):
-        #         continue
-        #     if unit.unit_id in unit_completion:
-        #        # logging.info('Barok >>>>>>>>>>>>>>> percent completion unit_id = %s: %s', unit.unit_id, unit_completion[unit.unit_id])
-        for unit in course.get_units():
+        course_units = course.get_units()
+        if not include_assessments:
+            course_units = filter(lambda x: x.type == 'U', course_units)
+
+        for unit in course_units:
             # Don't show assessments that are part of units.
             if course.get_parent_unit(unit.unit_id):
                 continue
@@ -340,7 +412,17 @@ class StudentProgressTracker(object):
         return units
 
 class StudentProgressRestHandler(BaseRESTHandler):
-    """REST handler to manage retrieving student progress."""
+    """REST handler to manage retrieving student progress.
+
+    Note:
+        Inherits from BaseRESTHandler.
+
+    Attributes:
+        SCHEMA_VERSIONS (int): Current version of REST handler
+        URL (str): Path to REST handler
+        XSRF_TOKEN (str): Token used for xsrf security functions.
+
+    """
 
     XSRF_TOKEN = 'student-progress-handler'
     SCHEMA_VERSIONS = ['1']
@@ -378,7 +460,17 @@ class StudentProgressRestHandler(BaseRESTHandler):
                 self.XSRF_TOKEN))
 
 class CourseSectionRestHandler(BaseRESTHandler):
-    """REST handler to manage skills."""
+    """REST handler to manage retrieving and updating course sections.
+
+    Note:
+        Inherits from BaseRESTHandler.
+
+    Attributes:
+        SCHEMA_VERSIONS (int): Current version of REST handler
+        URL (str): Path to REST handler
+        XSRF_TOKEN (str): Token used for xsrf security functions.
+
+    """
 
     XSRF_TOKEN = 'section-handler'
     SCHEMA_VERSIONS = ['1']
@@ -426,6 +518,7 @@ class CourseSectionRestHandler(BaseRESTHandler):
         pass
 
     def put(self):
+        """Inserts or updates a course section."""
         request = transforms.loads(self.request.get('request'))
         key = request.get('key')
 
@@ -512,20 +605,31 @@ class CourseSectionRestHandler(BaseRESTHandler):
             self, 200, 'Saved.', payload_dict)
 
 class ResourceSection(AbstractResourceHandler):
+    """Definition for the course section resource.
+
+    Note:
+        Inherits from AbstractResourceHandler.
+
+    Attributes:
+        TYPE (int): entity for resource
+
+    """
 
     TYPE = 'course_section'
 
     @classmethod
     def get_resource(cls, course, key):
+        """Loads a course section."""
         return teacher_entity.CourseSectionDAO.load(key)
 
     @classmethod
     def get_resource_title(cls, rsrc):
+        """Returns course name."""
         return rsrc.name
 
     @classmethod
     def get_schema(cls, course, key):
-
+        """Returns a schema definition of a section."""
         schema = schema_fields.FieldRegistry(
             'Section', description='section')
         schema.add_property(schema_fields.SchemaField(
@@ -554,15 +658,11 @@ class ResourceSection(AbstractResourceHandler):
     def get_edit_url(cls, key):
         return None
 
-#Not needed as far as I know, at least, until we run into a scenario where we might need to define roles specific to
-# this module (can edit students maybe, something like that)
-# def permissions_callback(app_context):
-#     return [
-#             roles.Permission(ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)
-#         ]
-
 def notify_module_enabled():
+    """Handles things after module has been enabled."""
+
     def get_action(handler):
+        """Redirects to teacher_dashboard."""
         handler.redirect('/modules/teacher_dashboard?action=teacher_dashboard&tab=%s' % handler.request.get('tab') or
                          TeacherHandler.DEFAULT_TAB)
 
@@ -575,6 +675,7 @@ def notify_module_enabled():
     #add post actions
     dashboard.DashboardHandler.add_custom_post_action('teacher_reg', TeacherHandler.post_teacher_reg)
 
+    #add permissions for the dashboard sections
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_ASSETS_PERMISSION, ACCESS_ASSETS_PERMISSION_DESCRIPTION)
     dashboard.DashboardHandler.add_external_permission(
@@ -605,17 +706,6 @@ def notify_module_enabled():
 
     #register tabs
     TeacherHandler.register_tabs()
-
-    #Don't need to register permissions here, dashboard module takes care of that
-    #roles.Roles.register_permissions(
-    #    custom_module, permissions_callback)
-
-    #here's where I would register my entities, IF I HAD ANY
-    #courses.ADDITIONAL_ENTITIES_FOR_COURSE_IMPORT.add(ResourceBundleEntity)
-    #courses.ADDITIONAL_ENTITIES_FOR_COURSE_IMPORT.add(I18nProgressEntity)
-
-    #register handlers (register is in BaseDashboardExtension)
-    #TeacherHandler.register()
 
     #hooks would go here, none needed for a basic module. yet....
     #dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
@@ -655,6 +745,3 @@ def register_module():
         notify_module_enabled=notify_module_enabled)
 
     return custom_module
-
-
-

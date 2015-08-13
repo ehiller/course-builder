@@ -618,7 +618,8 @@ def notify_module_enabled():
     #TeacherHandler.register()
 
     #hooks would go here, none needed for a basic module. yet....
-    # dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
+    #dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
+    #dashboard.DashboardHandler.POST_LOAD_HOOKS.append(TeacherHandler.on_post_teacher_reg)
 
     dashboard.DashboardHandler.add_nav_mapping(
         TeacherHandler.ACTION, 'teacher_dashboard')

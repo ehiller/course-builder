@@ -594,6 +594,8 @@ class CourseSectionRestHandler(BaseRESTHandler):
                         'email']), self.get_course())
                     student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[
                         'email']), self.get_course())
+                    student['detailed_course_completion'] = StudentProgressTracker.get_detailed_progress(
+                        Student.get_by_email(student['email']), self.get_course())
 
         payload_dict = {
             'key': key_after_save,
@@ -711,8 +713,8 @@ def notify_module_enabled():
     #dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
     #dashboard.DashboardHandler.POST_LOAD_HOOKS.append(TeacherHandler.on_post_teacher_reg)
 
-    dashboard.DashboardHandler.add_nav_mapping(
-        TeacherHandler.ACTION, 'teacher_dashboard')
+    # dashboard.DashboardHandler.add_nav_mapping(
+    #     TeacherHandler.ACTION, 'teacher_dashboard')
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_TEACHER_DASHBOARD_PERMISSION, ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION)
     

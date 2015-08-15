@@ -83,7 +83,10 @@
                             addStudentsPopup.open(function (students) {
                                 var table = $(document).find('.student-list-table');
                                 $('.student-list-table tr:gt(0)').remove(); //remove all but header row
-                                addStudentsPopup.rebuildStudentsTable(students, table, $('.unit-select'));
+                                addStudentsPopup.rebuildStudentsTable(students, table, $('.unit-select'),
+                                    $('.lesson-select'));
+
+                                window.students = students;
                             });
                         })
                     });
@@ -164,10 +167,11 @@
                                 <td class="student-name">{{ student['name'] }}</td>
                                 <td class="student-email">{{ student['email'] }}</td>
                                 <td class="student-completion">
-                                    <progress value="{{ student['course_completion'] }}">
+                                    <progress class="student-progress" value="{{ student['course_completion'] / 100 }}">
                                         <!-- Browsers that support the progress tag will ignore this div -->
                                         <div class="progress-bar">
-                                            <span style="width: {{ student['course_completion'] }}%;">Progress: {{ student['course_completion'] }}%</span>
+                                            <span style="width: {{ student['course_completion'] / 100 }}%;">Progress: {{
+                                                student['course_completion'] }}%</span>
                                         </div>
                                     </progress>
                                     &nbsp;
@@ -180,32 +184,6 @@
                 </tbody>
             </table>
         </div>
-
-        <!--<div id="sl-left">
-            <div class="student-progress">
-                <div class="row">
-                    <div class="left-matter header">
-                        <div class="name">Student Name</div>
-                    </div>
-                    <div class="header">
-                        <div class="name">Email</div>
-                    </div>
-                </div>
-                <ol class="sl-students">
-                     {% for student_key in section.students %}
-                        <li data-unit-id="1">
-                            <div class="row student">
-                                <div class="left-matter">
-                                    <div class="fname">{{ section.students[student_key]['name'] }}</div>
-                                    <div class="lname">LastName</div>
-                                </div>
-                                <div class="email">{{ section.students[student_key]['email'] }}</div>
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ol>
-            </div>
-        </div>-->
 
         <div class="sl-footer" style="margin: 5px;">
             <a class="gcb-button gcb-pull-right"

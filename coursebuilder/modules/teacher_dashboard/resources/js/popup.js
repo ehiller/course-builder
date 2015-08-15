@@ -584,7 +584,7 @@ AddStudentsPopup.prototype = {
     return this;
   },
 
-  rebuildStudentsTable(students, table, unitSelect) {
+  rebuildStudentsTable(students, table, unitSelect, lessonSelect) {
 
     table.remove('tbody');
     var tbody = $('<tbody></tbody>');
@@ -621,13 +621,8 @@ AddStudentsPopup.prototype = {
         td.find('.student-email').text(student.email);
         tr.append(td);
 
-        td = $(
-            '<td>' +
-            '  <span class="student-completion"></span>' +
-            '</td>'
-        );
-
         var completionValue = student.course_completion;
+        var lessonCompletionValue = 'N/A';
 
         if (unitSelect != null) {
             var unitId = $(unitSelect).val();
@@ -639,9 +634,47 @@ AddStudentsPopup.prototype = {
                     completionValue = value;
                 }
             });
+            if (unitId != 'course_completion') {
+            var lessonId = $(lessonSelect).val();
+                for (var i = 0; i < student.detailed_course_completion.length; i++) {
+                    var unit_detail = student.detailed_course_completion[i];
+                    if (unit_detail.unit_id == unitId) {
+                        for (var j = 0; j < unit_detail.lessons.length; j++) {
+                            if (unit_detail.lessons[j].lesson_id == lessonId) {
+                                lessonCompletionValue = ( unit_detail.lessons[j].completion / 2 ) * 100;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        td.find('.student-completion').text(completionValue + '%');
+        td = $(
+            '<td>' +
+            '   <progress class="student-progress" value="' + (completionValue / 100) + '">' +
+            '   <div class="progress-bar">' +
+            '     <span style="width:' + (completionValue / 100) + '%;">Progress:' + completionValue/100 + '</span>' +
+            '   </div>' +
+            '   </progress>' +
+            '   <span class="student-completion">' + completionValue + '%</span>' +
+            '</td>'
+        );
+
+        tr.append(td);
+
+        td = $(
+            '<td>' +
+            '  <span class="student-lesson-completion">' + lessonCompletionValue + '</span>' +
+            '</td>'
+        );
+
+        tr.append(td);
+
+        td = $('<td style="display:none;">' +
+          '<input  class="student-id" type="hidden" value="' + key + '"' +
+          '/></td>'
+        );
+
         tr.append(td);
 
         tbody.append(tr);
@@ -1061,7 +1094,11 @@ function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
             lessonCompletionValue = 'N/A';
         }
 
-        $(this).find('.student-completion').text(completionValue + '%');
+        $(this).find('.student-progress').val(completionValue / 100);
+        $(this).find('.student-progress').append('<div class="progress-bar">' +
+            '<span style="width:' + completionValue / 100 + '%;">Progress: ' + completionValue + '%</span>' +
+            '</div>');
+
         if (lessonCompletionValue == 'N/A') {
             $(this).find('.student-lesson-completion').text(lessonCompletionValue);
         }

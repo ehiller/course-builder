@@ -160,7 +160,7 @@
                 </thead>
                 <tbody>
                     {% if section.students %}
-                        {% for student in section.students.values() %}
+                        {% for student in section.students.values() | sort(attribute='name') %}
                             <tr>
                                 <td class="student-dashboard"><a class="gcb-button" role="button"
                                        href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student={{ student['email'] }}">View Dashboard</a></td>

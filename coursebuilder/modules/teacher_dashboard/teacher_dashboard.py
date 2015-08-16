@@ -215,6 +215,7 @@ class TeacherHandler(dashboard.DashboardHandler):
 
         #need to get progress values for ALL students since we show completion for every student
         if course_section.students and len(course_section.students) > 0:
+            #course_section.students = sorted(course_section.students.values(), key=lambda k: (k['name']))
             for student in course_section.students.values():
                 student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[
                     'email']), self.get_course())
@@ -499,8 +500,6 @@ class CourseSectionRestHandler(BaseRESTHandler):
         else:
             sorted_course_sections = {}
 
-            #sorted(course_sections.values(), key=operator.attrgetter('section_year', 'section_name'))
-
         payload_dict = {
             'section_list': sorted_course_sections
         }
@@ -561,7 +560,7 @@ class CourseSectionRestHandler(BaseRESTHandler):
                     student_info['user_id'] = student.user_id
                     students[student.user_id] = student_info
 
-            #sorted_students = sorted(students.values(), key=lambda k: (k['name']))
+            sorted_students = sorted(students.values(), key=lambda k: (k['name']))
 
             if python_dict.get('name') != None:
                 new_course_section.section_name = python_dict.get('name')
@@ -588,6 +587,7 @@ class CourseSectionRestHandler(BaseRESTHandler):
 
         section = teacher_entity.CourseSectionEntity.get_course_for_user(key_after_save)
         if section:
+            section.students = sorted_students
             if section.students and len(section.students) > 0:
                 for student in section.students.values():
                     student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[

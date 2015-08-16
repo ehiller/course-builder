@@ -173,6 +173,8 @@ SectionTable.prototype = {
     this._content = $(
       '<div class="controls" style="margin: 10px;">' +
       '  <button class="gcb-button add-new-section">+ Create New Section</button>' +
+      '  <br />' +
+      '  <input style="margin-top: 15px;" type="checkbox" class="view-active" checked /><label>Show All</label>' +
       '</div>' +
       '<h3>Sections</h3>' +
       '<table class="sections-table"></table>');
@@ -185,6 +187,29 @@ SectionTable.prototype = {
       sectionPopUp.open(function() {
         that._refresh();
       });
+    });
+
+    this._content.find('.view-active').on("click", function() {
+        var showInactive = $(this).prop('checked');
+
+        if (!showInactive) {
+            $('.sections-table > tbody > tr').each(function (index, value) {
+
+                var active = $(this).find('.section-active').prop('checked');
+                if (active) {
+                    $(this).css('display', 'table-row');
+                }
+                else {
+                    $(this).css('display', 'none');
+                }
+            });
+        }
+        else
+        {
+            $('.sections-table > tbody > tr').each(function (index, value) {
+                $(this).css('display', 'table-row');
+            });
+        }
     });
 
     this._refresh();

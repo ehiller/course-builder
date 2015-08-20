@@ -5,12 +5,39 @@
     </div>
 
     <script>
-         $(document).ready(function(){
-            var data = [{% for student in students%} "{{ student['email'] }}" {% if not loop.last %},{% endif
-     %}{% endfor %} ];
+         $(document).ready(function() {
+            var data = [
+                {% for student in students%}
+                  {
+                    value: "{{ student['email'] }}",
+                    label: "{{ student['name'] }}",
+                    desc: "{{ student['email'] }}"
+                  } {% if not loop.last %},{% endif %}
+                  {% endfor %}
+                ];
+
             $("#students_dropdown").autocomplete({
-                source: data,
+                source: function (request, response) {
+                        function hasMatch(s) {
+                            return s.toLowerCase().indexOf(request.term.toLowerCase())!==-1;
+                        }
+                        var i, l, obj, matches = [];
+
+                        if (request.term==="") {
+                            response([]);
+                            return;
+                        }
+
+                        for  (i = 0, l = data.length; i<l; i++) {
+                            obj = data[i];
+                            if (hasMatch(obj.label) || hasMatch(obj.desc)) {
+                                matches.push(obj);
+                            }
+                        }
+                        response(matches);
+                    },
                 select: function (a, b) {
+                    $('#student-detail-section').css('display', 'block');
                     var unitList = new UnitList();
 
                     var unitListLoaded = $.Deferred(function(def) {
@@ -20,23 +47,31 @@
                     });
                     $.when(unitListLoaded).then(function() {
                       var studentDetailTable = new StudentDetailTable(unitList);
-                      $('.student-detail-table').remove('tbody');
+                      $('.student-detail-table tr:gt(0)').remove();
                       studentDetailTable._buildBody().appendTo('.student-detail-table');
 
                       $('.student-name').text(unitList.getStudentName());
                       $('.student-email').text(unitList.getStudentEmail());
                     });
-
-                    //  $('.student-name').text('
                 }
-            });
+            })
+            .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
+                return $( "<li>" )
+                    .append( "<a>" + item.label +
+                        "<br><span style='font-size: 80%;'>Email: " + item.desc + "</span>" )
+                    .appendTo( ul );
+            };
+
         });
     </script>
+{% else %}
+  <script>
+      cbShowMsg('There are no students currently associated with any courses.');
+  </script>
 {% endif %}
 
-{% if student %}
-
-    <h3>Student Dashboard for {{ student.name }}</h3>
+<div id="student-detail-section" {% if not student %} style="display: none;" {% endif %} >
+    <h3>Student Dashboard for <span class="student-name">{{ student.name }}</span></h3>
 
     <div class="student-detail" style="margin: 5px;">
         <div style="margin: 3px;">
@@ -44,7 +79,7 @@
         </div>
     </div>
 
-    <table class="student-detail-table" style="margin-top: 15px;">
+    <table class="student-detail-table" style="margin-top: 15px; width: 30%;">
       <colgroup>
         <col style="width: 10%">
         <col>
@@ -57,18 +92,19 @@
             </th>
         </tr>
 
+        {% if units %}
       {% for unit in units %}
         <tr class="content-one {{unit['unit_id']}} unit_title">
           <th style="cursor:pointer;color:blue" align="left">&nbsp;&nbsp;&nbsp;{{ unit['title'] }}</th>
           <td>
-              <span id="unit-completion-{{unit['title']}}">{{ unit['completion'] }}</span>
+              <span id="unit-completion-{{unit['title']}}">{{ unit['completion'] * 100 }}%</span>
           </td>
         </tr>
         {% for lesson in unit['lessons'] %}
-        <tr class="content-one {{unit['unit_id']}}-lessons">
+        <tr class="content-one {{unit['unit_id']}}-lessons" style="display: none;">
             <th align="left">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ lesson['title'] }}</th>
             <td>
-                <span id="lesson-completion-{{unit['title']}}">{{ lesson['completion'] }}</span>
+                <span id="lesson-completion-{{unit['title']}}">{{ lesson['completion'] / 2 * 100 }}%</span>
             </td>
         </tr>
         {% endfor %}
@@ -81,6 +117,7 @@
             });
         </script>
       {% endfor %}
+        {% endif %}
 
       {% for header, value in extra_student_data %}
         {% if header or value %}
@@ -91,4 +128,5 @@
         {% endif %}
       {% endfor %}
     </table>
-{% endif %}
+</div>
+

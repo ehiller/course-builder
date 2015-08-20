@@ -173,6 +173,8 @@ SectionTable.prototype = {
     this._content = $(
       '<div class="controls" style="margin: 10px;">' +
       '  <button class="gcb-button add-new-section">+ Create New Section</button>' +
+      '  <br />' +
+      '  <input style="margin-top: 15px;" type="checkbox" class="view-active" checked /><label>Show All</label>' +
       '</div>' +
       '<h3>Sections</h3>' +
       '<table class="sections-table"></table>');
@@ -185,6 +187,29 @@ SectionTable.prototype = {
       sectionPopUp.open(function() {
         that._refresh();
       });
+    });
+
+    this._content.find('.view-active').on("click", function() {
+        var showInactive = $(this).prop('checked');
+
+        if (!showInactive) {
+            $('.sections-table > tbody > tr').each(function (index, value) {
+
+                var active = $(this).find('.section-active').prop('checked');
+                if (active) {
+                    $(this).css('display', 'table-row');
+                }
+                else {
+                    $(this).css('display', 'none');
+                }
+            });
+        }
+        else
+        {
+            $('.sections-table > tbody > tr').each(function (index, value) {
+                $(this).css('display', 'table-row');
+            });
+        }
     });
 
     this._refresh();
@@ -584,7 +609,7 @@ AddStudentsPopup.prototype = {
     return this;
   },
 
-  rebuildStudentsTable(students, table, unitSelect) {
+  rebuildStudentsTable(students, table, unitSelect, lessonSelect) {
 
     table.remove('tbody');
     var tbody = $('<tbody></tbody>');
@@ -621,13 +646,8 @@ AddStudentsPopup.prototype = {
         td.find('.student-email').text(student.email);
         tr.append(td);
 
-        td = $(
-            '<td>' +
-            '  <span class="student-completion"></span>' +
-            '</td>'
-        );
-
         var completionValue = student.course_completion;
+        var lessonCompletionValue = 'N/A';
 
         if (unitSelect != null) {
             var unitId = $(unitSelect).val();
@@ -639,9 +659,47 @@ AddStudentsPopup.prototype = {
                     completionValue = value;
                 }
             });
+            if (unitId != 'course_completion') {
+            var lessonId = $(lessonSelect).val();
+                for (var i = 0; i < student.detailed_course_completion.length; i++) {
+                    var unit_detail = student.detailed_course_completion[i];
+                    if (unit_detail.unit_id == unitId) {
+                        for (var j = 0; j < unit_detail.lessons.length; j++) {
+                            if (unit_detail.lessons[j].lesson_id == lessonId) {
+                                lessonCompletionValue = ( unit_detail.lessons[j].completion / 2 ) * 100;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        td.find('.student-completion').text(completionValue + '%');
+        td = $(
+            '<td>' +
+            '   <progress class="student-progress" value="' + (completionValue / 100) + '">' +
+            '   <div class="progress-bar">' +
+            '     <span style="width:' + (completionValue / 100) + '%;">Progress:' + completionValue/100 + '</span>' +
+            '   </div>' +
+            '   </progress>' +
+            '   <span class="student-completion">' + completionValue + '%</span>' +
+            '</td>'
+        );
+
+        tr.append(td);
+
+        td = $(
+            '<td>' +
+            '  <span class="student-lesson-completion">' + lessonCompletionValue + '</span>' +
+            '</td>'
+        );
+
+        tr.append(td);
+
+        td = $('<td style="display:none;">' +
+          '<input  class="student-id" type="hidden" value="' + key + '"' +
+          '/></td>'
+        );
+
         tr.append(td);
 
         tbody.append(tr);
@@ -1035,21 +1093,43 @@ SectionEditorForOeditor.prototype = {
 /**
  * functions to rebuild completion column based off of selected unit
  */
-function rebuildCompletionColumn(students, unitSelect) {
+function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
     var unitId = $(unitSelect).val();
+    var lessonId = $(lessonSelect).val();
     $('.student-list-table > tbody > tr').each(function(index, value) {
         var completionValue;
+        var lessonCompletionValue;
         var studentId = $(this).find('.student-id').val();
 
         if (unitId != 'course_completion') {
             completionValue = students[studentId].unit_completion[unitId] * 100;
+            for (var i = 0; i < students[studentId].detailed_course_completion.length; i++) {
+                var unit_detail = students[studentId].detailed_course_completion[i];
+                if (unit_detail.unit_id == unitId) {
+                    for (var j = 0; j < unit_detail.lessons.length; j++) {
+                        if (unit_detail.lessons[j].lesson_id == lessonId) {
+                            lessonCompletionValue = ( unit_detail.lessons[j].completion / 2 ) * 100;
+                        }
+                    }
+                }
+            }
         }
         else {
             completionValue = students[studentId].course_completion;
+            lessonCompletionValue = 'N/A';
         }
 
-        $(this).find('.student-completion').text(completionValue + '%');
+        $(this).find('.student-progress').val(completionValue / 100);
+        $(this).find('.student-progress').append('<div class="progress-bar">' +
+            '<span style="width:' + completionValue / 100 + '%;">Progress: ' + completionValue + '%</span>' +
+            '</div>');
 
+        if (lessonCompletionValue == 'N/A') {
+            $(this).find('.student-lesson-completion').text(lessonCompletionValue);
+        }
+        else {
+            $(this).find('.student-lesson-completion').text(lessonCompletionValue + '%');
+        }
     });
 }
 

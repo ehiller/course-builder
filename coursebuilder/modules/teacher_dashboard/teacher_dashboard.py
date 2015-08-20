@@ -486,9 +486,10 @@ class CourseSectionRestHandler(BaseRESTHandler):
     def get(self):
         """Get a section."""
 
-        if not roles.Roles.is_course_admin(self.app_context):
-            transforms.send_json_response(self, 401, 'Access denied.', {})
-            return
+        #probably don't want to restrict access when teachers won't be course admins
+        # if not roles.Roles.is_course_admin(self.app_context):
+        #     transforms.send_json_response(self, 401, 'Access denied.', {})
+        #     return
 
         key = self.request.get('key')
 
@@ -525,10 +526,11 @@ class CourseSectionRestHandler(BaseRESTHandler):
                 request, self.XSRF_TOKEN, {}):
             return
 
-        if not roles.Roles.is_course_admin(self.app_context):
-            transforms.send_json_response(
-                self, 401, 'Access denied.', {'key': key})
-            return
+        #probably don't want to restrict access when teachers won't be course admins
+        # if not roles.Roles.is_course_admin(self.app_context):
+        #     transforms.send_json_response(
+        #         self, 401, 'Access denied.', {'key': key})
+        #     return
 
         payload = request.get('payload')
         json_dict = transforms.loads(payload)
@@ -695,6 +697,17 @@ def notify_module_enabled():
     dashboard.DashboardHandler.add_external_permission(
         ACCESS_TEACHER_DASHBOARD_PERMISSION, ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION)
 
+    #map permissions to actions
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(TeacherHandler.ACTION),
+                                                               ACCESS_TEACHER_DASHBOARD_PERMISSION)
+    nav_mappings = dashboard.DashboardHandler.get_nav_mappings()
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[1][0]), ACCESS_ASSETS_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[2][0]), ACCESS_SETTINGS_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[3][0]), ACCESS_ROLES_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[4][0]), ACCESS_ANALYTICS_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[5][0]), ACCESS_SEARCH_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[6][0]), ACCESS_PEERREVIEW_PERMISSION)
+    dashboard.DashboardHandler.map_action_to_permission('get_' + str(nav_mappings[7][0]), ACCESS_SKILLMAP_PERMISSION)
 
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/popup.js')
@@ -708,17 +721,6 @@ def notify_module_enabled():
 
     #register tabs
     TeacherHandler.register_tabs()
-
-    #hooks would go here, none needed for a basic module. yet....
-    #dashboard.DashboardHandler.POST_SAVE_HOOKS.append(TeacherHandler.on_post_teacher_reg)
-    #dashboard.DashboardHandler.POST_LOAD_HOOKS.append(TeacherHandler.on_post_teacher_reg)
-
-    # dashboard.DashboardHandler.add_nav_mapping(
-    #     TeacherHandler.ACTION, 'teacher_dashboard')
-    dashboard.DashboardHandler.add_external_permission(
-        ACCESS_TEACHER_DASHBOARD_PERMISSION, ACCESS_TEACHER_DASHBOARD_PERMISSION_DESCRIPTION)
-    
-
 
 
 

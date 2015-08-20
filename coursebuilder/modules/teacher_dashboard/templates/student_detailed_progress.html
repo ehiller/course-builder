@@ -64,6 +64,10 @@
 
         });
     </script>
+{% else %}
+  <script>
+      cbShowMsg('There are no students currently associated with any courses.');
+  </script>
 {% endif %}
 
 <div id="student-detail-section" {% if not student %} style="display: none;" {% endif %} >

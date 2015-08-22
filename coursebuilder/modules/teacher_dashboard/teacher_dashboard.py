@@ -149,10 +149,11 @@ class TeacherHandler(dashboard.DashboardHandler):
         #need to go through every course section for the current user and get all unique students
         students = []
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
-        for course_section in course_sections.values():
-            for student_in_section in course_section.students.values():
-                if not student_in_section in students:
-                    students.append(student_in_section)
+        if course_sections and len(course_sections) > 0:
+            for course_section in course_sections.values():
+                for student_in_section in course_section.students.values():
+                    if not student_in_section in students:
+                        students.append(student_in_section)
 
         #check to see if we have a student and if we need to get detailed progress
         student = None

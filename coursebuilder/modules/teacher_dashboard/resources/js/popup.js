@@ -174,7 +174,8 @@ SectionTable.prototype = {
       '<div class="controls" style="margin: 10px;">' +
       '  <button class="gcb-button add-new-section">+ Create New Section</button>' +
       '  <br />' +
-      '  <input style="margin-top: 15px;" type="checkbox" class="view-active" checked /><label>Show All</label>' +
+      '  <input style="margin-top: 15px;" type="checkbox" class="view-active" checked /><label>Show Inactive' +
+      '    Courses</label>' +
       '</div>' +
       '<h3>Sections</h3>' +
       '<table class="sections-table"></table>');

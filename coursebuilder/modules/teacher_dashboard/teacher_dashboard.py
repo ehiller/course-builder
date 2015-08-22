@@ -14,6 +14,8 @@ import os
 import appengine_config
 import teacher_entity
 
+from google.appengine.api import users
+
 from common import tags
 from common import crypto
 
@@ -544,6 +546,13 @@ class CourseSectionRestHandler(BaseRESTHandler):
             return
 
         errors = []
+
+        teacher = teacher_entity.Teacher.get_by_email(users.get_current_user().email())
+
+        if not teacher.is_active:
+            errors.append('Unable to save changes. Teacher account is inactive.')
+            self.validation_error('\n'.join(errors))
+            return
 
         if key:
             key_after_save = key

@@ -482,6 +482,7 @@ function EditSectionPopup(sectionList, sectionId) {
   this._form.find('h2.title').text(title);
 
   this._form.find('button.new-section-save-button').click(function() {
+    cbShowMsg('Saving...');
     that._onSave();
     return false;
   });
@@ -571,6 +572,7 @@ function AddStudentsPopup(sectionId, xsrfToken) {
   this._emailInput = this._form.find('.student-emails');
 
   this._form.find('button.add-students-save-button').click(function() {
+    cbShowMsg('Saving...');
     that._onSave();
     return false;
   });

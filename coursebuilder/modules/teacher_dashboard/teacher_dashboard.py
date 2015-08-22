@@ -550,6 +550,11 @@ class CourseSectionRestHandler(BaseRESTHandler):
 
         teacher = teacher_entity.Teacher.get_by_email(users.get_current_user().email())
 
+        if not teacher:
+            errors.append('Unable to save changes. Teacher is not registered. Please contact a course admin.')
+            self.validation_error('\n'.join(errors))
+            return
+
         if not teacher.is_active:
             errors.append('Unable to save changes. Teacher account is inactive.')
             self.validation_error('\n'.join(errors))
@@ -601,7 +606,7 @@ class CourseSectionRestHandler(BaseRESTHandler):
         if section:
             section.students = sorted_students
             if section.students and len(section.students) > 0:
-                for student in section.students.values():
+                for student in section.students:
                     student['unit_completion'] = StudentProgressTracker.get_unit_completion(Student.get_by_email(student[
                         'email']), self.get_course())
                     student['course_completion'] = StudentProgressTracker.get_overall_progress(Student.get_by_email(student[

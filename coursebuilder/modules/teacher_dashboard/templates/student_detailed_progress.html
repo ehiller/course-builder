@@ -2,10 +2,40 @@
     <div style="margin-bottom: 15px;">
         <label>Please enter a student email: </label>
         <input id="students_dropdown">
+        <button id="student-info-btn" class="gcb-button">Get Student Details</button>
     </div>
 
     <script>
          $(document).ready(function() {
+            var selectedStudent = undefined;
+
+            $('#student-info-btn').click(function () {
+              if ($('#students_dropdown').val().trim() === '' || selectedStudent === undefined) {
+                cbShowMsgAutoHide('Please select a student.');
+                return
+              }
+
+              cbShowMsg('Loading...');
+                $('#student-detail-section').css('display', 'block');
+                var unitList = new UnitList();
+
+                var unitListLoaded = $.Deferred(function(def) {
+                  unitList.load(function() {
+                    def.resolve()
+                  }, selectedStudent.value);
+                });
+                $.when(unitListLoaded).then(function() {
+                  var studentDetailTable = new StudentDetailTable(unitList);
+                  $('.student-detail-table tr:gt(0)').remove();
+                  studentDetailTable._buildBody().appendTo('.student-detail-table');
+
+                  $('.student-name').text(unitList.getStudentName());
+                  $('.student-email').text(unitList.getStudentEmail());
+
+                  cbHideMsg();
+                });
+            });
+
             var data = [
                 {% for student in students%}
                   {
@@ -37,22 +67,7 @@
                         response(matches);
                     },
                 select: function (a, b) {
-                    $('#student-detail-section').css('display', 'block');
-                    var unitList = new UnitList();
-
-                    var unitListLoaded = $.Deferred(function(def) {
-                      unitList.load(function() {
-                        def.resolve()
-                      }, b.item.value);
-                    });
-                    $.when(unitListLoaded).then(function() {
-                      var studentDetailTable = new StudentDetailTable(unitList);
-                      $('.student-detail-table tr:gt(0)').remove();
-                      studentDetailTable._buildBody().appendTo('.student-detail-table');
-
-                      $('.student-name').text(unitList.getStudentName());
-                      $('.student-email').text(unitList.getStudentEmail());
-                    });
+                    selectedStudent = b.item;
                 }
             })
             .data( "ui-autocomplete" )._renderItem = function( ul, item ) {

@@ -248,7 +248,7 @@ UnitList.prototype = {
   _onLoad: function(callback, data) {
     data = parseAjaxResponse(data);
     if (data.status != 200) {
-      showMsg('Unable to load student progress. Reload page and try again.');
+      showMsg(data.message);
       return;
     }
     this._xsrfToken = data['xsrf_token'];

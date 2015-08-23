@@ -1,9 +1,13 @@
 <script>
   $(function() {
+   // if cbShowMsg {
+      cbShowMsg('Loading...');
+    //}
     var sectionList = new SectionList();
 
     var sectionListLoaded = $.Deferred(function(def) {
       sectionList.load(function() {
+        cbHideMsg();
         def.resolve()
       });
     });

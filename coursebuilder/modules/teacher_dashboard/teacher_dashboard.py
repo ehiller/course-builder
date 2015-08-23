@@ -151,9 +151,10 @@ class TeacherHandler(dashboard.DashboardHandler):
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
         if course_sections and len(course_sections) > 0:
             for course_section in course_sections.values():
-                for student_in_section in course_section.students.values():
-                    if not any(x['user_id'] == student_in_section['user_id'] for x in students):
-                        students.append(student_in_section)
+                if course_section.students and len(course_section.students) > 0:
+                    for student_in_section in course_section.students.values():
+                        if not any(x['user_id'] == student_in_section['user_id'] for x in students):
+                            students.append(student_in_section)
 
         #check to see if we have a student and if we need to get detailed progress
         student = None

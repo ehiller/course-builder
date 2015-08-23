@@ -249,10 +249,19 @@ class TeacherHandler(dashboard.DashboardHandler):
            Also displays all registered teachers.
         """
 
+        alerts = []
+        disable_form = False
+
+        if not roles.Roles.is_course_admin(self.app_context):
+            alerts.append('Access denied. Please contact a course admin.')
+            disable_form = True
+
         template_values = {}
         template_values['teacher_reg_xsrf_token'] = self.create_xsrf_token('teacher_reg')
 
         template_values['teachers'] = teacher_entity.Teacher.get_all_teachers_for_course()
+        template_values['alert_messages'] = alerts
+        template_values['disable'] = disable_form
 
         main_content = self.get_template(
             'teacher_registration.html', [TEMPLATES_DIR]).render(template_values)

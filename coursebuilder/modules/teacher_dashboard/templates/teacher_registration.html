@@ -17,11 +17,12 @@
 
     <form action="/sample/modules/teacher_dashboard?action=teacher_reg&tab=teacher_reg" method='post'>
         <input type="hidden" name="action" value="teacher_reg" />
-        <input type="hidden" name="xsrf_token" value="{{ teacher_reg_xsrf_token|escape }}">
+        <input type="hidden" name="xsrf_token"
+               value="{{ teacher_reg_xsrf_token|escape }}">
 
         <div style="max-width: 350px;">
             <label for="email" style="width: 100%;">Email:</label><br />
-            <input id="email" type="text" name="email" size="35">
+            <input id="email" {% if disable %} disabled="true" {% endif %} type="text" name="email" size="35">
 
             <input id="active-teacher" style="margin-left: 15px;" disabled checked type="checkbox"
                    name="active-teacher" /><label>Active
@@ -30,14 +31,15 @@
             <br /><br />
             <label for="school" style="width: 100%; margin-top: 15px;">School:</label>
             <br />
-            <input id="school" type="text" name="school" size="35">
+            <input id="school" type="text" name="school" size="35" {% if disable %} disabled="true" {% endif %} />
         </div>
         <br />
-        <input id="submit-teacher-btn" style="margin: 10px 0px 10px 0px; " class="gcb-button" type="submit" value="Register" />
+        <input id="submit-teacher-btn" style="margin: 10px 0px 10px 0px; " type="submit" value="Register"
+                {% if disable %} disabled="true" {% else %} class="gcb-button" {% endif %} />
     </form>
 </div>
 
-{% if teachers %}
+{% if teachers and not disable %}
     <script>
          $(document).ready(function(){
             window.teachers = [

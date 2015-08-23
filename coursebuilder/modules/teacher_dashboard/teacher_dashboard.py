@@ -447,11 +447,17 @@ class StudentProgressRestHandler(BaseRESTHandler):
         #     return
 
         key = self.request.get('student')
+        errors = []
 
-        student = Student.get_by_email(key)
+        student = Student.get_by_email(key.strip())
         course = self.get_course()
 
-        units = StudentProgressTracker.get_detailed_progress(student, course)
+        if student:
+            units = StudentProgressTracker.get_detailed_progress(student, course)
+        else:
+            errors.append('An error occurred retrieving student data. Contact your course administrator.')
+            self.validation_error('\n'.join(errors))
+            return
 
         payload_dict = {
             'units': units,

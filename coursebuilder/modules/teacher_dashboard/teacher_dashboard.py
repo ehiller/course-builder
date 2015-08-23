@@ -152,7 +152,7 @@ class TeacherHandler(dashboard.DashboardHandler):
         if course_sections and len(course_sections) > 0:
             for course_section in course_sections.values():
                 for student_in_section in course_section.students.values():
-                    if not student_in_section in students:
+                    if not any(x['user_id'] == student_in_section['user_id'] for x in students):
                         students.append(student_in_section)
 
         #check to see if we have a student and if we need to get detailed progress

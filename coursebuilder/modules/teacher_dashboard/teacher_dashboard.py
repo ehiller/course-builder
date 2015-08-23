@@ -490,11 +490,6 @@ class CourseSectionRestHandler(BaseRESTHandler):
     def get(self):
         """Get a section."""
 
-        #probably don't want to restrict access when teachers won't be course admins
-        # if not roles.Roles.is_course_admin(self.app_context):
-        #     transforms.send_json_response(self, 401, 'Access denied.', {})
-        #     return
-
         key = self.request.get('key')
 
         course_sections = teacher_entity.CourseSectionEntity.get_course_sections_for_user()
@@ -530,12 +525,6 @@ class CourseSectionRestHandler(BaseRESTHandler):
                 request, self.XSRF_TOKEN, {}):
             return
 
-        #probably don't want to restrict access when teachers won't be course admins
-        # if not roles.Roles.is_course_admin(self.app_context):
-        #     transforms.send_json_response(
-        #         self, 401, 'Access denied.', {'key': key})
-        #     return
-
         payload = request.get('payload')
         json_dict = transforms.loads(payload)
         python_dict = transforms.json_to_dict(
@@ -570,13 +559,16 @@ class CourseSectionRestHandler(BaseRESTHandler):
             if 'students' in python_dict and python_dict['students'] is not None:
                 emails = python_dict['students'].split(',')
             for email in emails:
-                student = Student.get_by_email(email)
+                clean_email = email.strip().replace('\n', '').replace('\r', '')
+                student = Student.get_by_email(clean_email)
                 if student:
                     student_info = {}
-                    student_info['email'] = email
+                    student_info['email'] = clean_email
                     student_info['name'] = student.name
                     student_info['user_id'] = student.user_id
                     students[student.user_id] = student_info
+                else:
+                    errors.append('Unable to add: ' + clean_email)
 
             sorted_students = sorted(students.values(), key=lambda k: (k['name']))
 

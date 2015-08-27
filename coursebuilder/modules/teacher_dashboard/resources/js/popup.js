@@ -625,8 +625,8 @@ AddStudentsPopup.prototype = {
         var td = $(
             '<td>' +
             '  <a class="gcb-button" role="button"' +
-            '      href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student={{' +
-            '      section.students[student_key]["email"] }}">View Dashboard</a>' +
+            '      href="/sample/modules/teacher_dashboard?action=teacher_dashboard&tab=student_detail&student=' +
+            student.email + '">View Dashboard</a>' +
             '</td>'
         );
         tr.append(td);

@@ -1126,6 +1126,7 @@ function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
         $(this).find('.student-progress').append('<div class="progress-bar">' +
             '<span style="width:' + completionValue / 100 + '%;">Progress: ' + completionValue + '%</span>' +
             '</div>');
+        $(this).find('.student-completion-value').text(completionValue + '%');
 
         if (lessonCompletionValue == 'N/A') {
             $(this).find('.student-lesson-completion').text(lessonCompletionValue);

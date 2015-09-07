@@ -10,6 +10,8 @@ __author__ = 'ehiller@css.edu'
 
 import jinja2
 import os
+import datetime
+import collections
 
 import appengine_config
 import teacher_entity
@@ -23,6 +25,10 @@ from models import custom_modules
 from models import roles
 from models import transforms
 from models.models import Student
+from models.models import EventEntity
+from models import utils as models_utils
+from models import jobs
+from models import event_transforms
 
 from controllers.utils import BaseRESTHandler
 
@@ -32,6 +38,8 @@ from common import schema_fields
 #since we are extending the dashboard, probably want to include dashboard stuff
 from modules.dashboard import dashboard
 from modules.dashboard import tabs
+
+from models.models import QuestionDAO
 
 #Setup paths and directories for templates and resources
 RESOURCES_PATH = '/modules/teacher_dashboard/resources'
@@ -164,8 +172,10 @@ class TeacherHandler(dashboard.DashboardHandler):
         if (student):
             course = self.get_course()
             units = StudentProgressTracker.get_detailed_progress(student, course)
+            scores = ActivityScoreParser.get_activity_scores(student, course)
         else:
             units = None
+            scores = None
 
         #render the template for the student dashboard view
         main_content = self.get_template(
@@ -173,7 +183,8 @@ class TeacherHandler(dashboard.DashboardHandler):
                 {
                     'units': units, #unit completion
                     'student': student, #course defined student object, need email and name
-                    'students': students #list of students, names and emails, from a course section student list
+                    'students': students, #list of students, names and emails, from a course section student list
+                    'scores': scores
                 })
 
         #call DashboardHandler function to render the page
@@ -424,6 +435,225 @@ class StudentProgressTracker(object):
                     'lessons': lesson_progress,
                     })
         return units
+
+class ActivityScoreParser(jobs.MapReduceJob):
+    """class to parse the data returned with activities"""
+    def __init__(self):
+        """holds activity score info unit -> lesson -> question"""
+        self.activity_scores = { }
+        self.params = {}
+
+    @staticmethod
+    def get_description():
+        return 'activity answers parser'
+
+    @staticmethod
+    def entity_class():
+        return EventEntity
+
+    @classmethod
+    def _get_questions_by_question_id(cls, questions_by_usage_id):
+        ret = []
+        for question in questions_by_usage_id.values():
+            ret.append(QuestionDAO.load(question['id']))
+        return ret
+
+    def build_additional_mapper_params(self, app_context):
+        questions_by_usage_id = event_transforms.get_questions_by_usage_id(app_context)
+        return {
+            'questions_by_usage_id':
+                questions_by_usage_id,
+            'valid_question_ids': (
+                event_transforms.get_valid_question_ids()),
+            'group_to_questions': (
+                event_transforms.get_group_to_questions()),
+            'assessment_weights':
+                event_transforms.get_assessment_weights(app_context),
+            'unscored_lesson_ids':
+                event_transforms.get_unscored_lesson_ids(app_context),
+            'questions_by_question_id':
+                ActivityScoreParser._get_questions_by_question_id(questions_by_usage_id)
+            }
+
+    def parse_activity_scores(self, activity_attempt):
+        if activity_attempt.source == 'tag-assessment':
+            data = transforms.loads(activity_attempt.data)
+
+            timestamp = int(
+            (activity_attempt.recorded_on - datetime.datetime(1970, 1, 1)).total_seconds())
+
+            questions = self.params['questions_by_usage_id']
+            valid_question_ids = self.params['valid_question_ids']
+            assessment_weights = self.params['assessment_weights']
+            group_to_questions = self.params['group_to_questions']
+
+            student_answers = self.activity_scores.get(activity_attempt.user_id, {})
+
+            answers = event_transforms.unpack_check_answers(
+                data, questions, valid_question_ids, assessment_weights,
+                group_to_questions, timestamp)
+
+            #add score to right lesson
+            question_info = questions[data['instanceid']]
+            unit_answers = student_answers.get(question_info['unit'], {})
+            lesson_answers = unit_answers.get(question_info['lesson'], [])
+            lesson_answers.append(answers)
+
+            unit_answers[question_info['lesson']] = lesson_answers
+            student_answers[question_info['unit']] = unit_answers
+
+            self.activity_scores[activity_attempt.user_id] = student_answers
+
+        return self.activity_scores
+
+    def build_missing_scores(self):
+         #validate total points for lessons, need both question collections for score and weight
+        total_scores = {}
+        questions = self.params['questions_by_usage_id']
+        questions_info = self.params['questions_by_question_id']
+        for student_id in self.activity_scores:
+            for question in questions.values():
+                unit_id = question['unit']
+                lesson_id = question['lesson']
+
+                question_answer = None
+                question_answer_index = 0
+                if unit_id in self.activity_scores[student_id] and lesson_id in \
+                        self.activity_scores[student_id][unit_id]:
+                    for question_answer_info_list in self.activity_scores[student_id][unit_id][lesson_id]:
+                        question_answer = next((x for x in question_answer_info_list if x.sequence == question['sequence']), None)
+                        if question_answer:
+                            break
+                        else:
+                            question_answer_index += 1
+
+                question_info = next((x for x in questions_info if x and x.id == question['id']), None)
+                score = 0
+                choices = None
+                if question_info:
+                    if 'choices' in question_info.dict:
+                        choices = question_info.dict['choices']
+                        for choice in choices:
+                            score += choice['score']
+                    elif 'graders' in question_info.dict:
+                        choices = question_info.dict['graders']
+                        for grader in choices:
+                            score += grader['score']
+                    score = score * question['weight']
+                else:
+                    score = 1
+
+                if not question_answer:
+                    question_answer = ActivityScoreParser.QuestionAnswerInfo(
+                        unit_id, lesson_id, question['sequence'],
+                        question['id'], 'NotCompleted',
+                        0, '', 0, 0, False, score, choices)
+                    if unit_id in self.activity_scores[student_id] and lesson_id in \
+                            self.activity_scores[student_id][unit_id]:
+                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
+                    elif unit_id in self.activity_scores[student_id] and not lesson_id in \
+                            self.activity_scores[student_id][unit_id]:
+                        self.activity_scores[student_id][unit_id][lesson_id] = []
+                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
+                    else:
+                        self.activity_scores[student_id][unit_id] = {}
+                        self.activity_scores[student_id][unit_id][lesson_id] = []
+                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
+                else:
+                    question_answer = ActivityScoreParser.QuestionAnswerInfo(
+                        question_answer.unit_id, question_answer.lesson_id, question_answer.sequence,
+                        question_answer.question_id, question_answer.question_type,
+                        question_answer.timestamp, question_answer.answers, question_answer.score,
+                        question_answer.weighted_score, question_answer.tallied, score, choices)
+                    self.activity_scores[student_id][unit_id][lesson_id][question_answer_index][0] = question_answer
+
+    @classmethod
+    def get_activity_scores(cls, student, course):
+        """Retrieve activity data for student using EventEntity"""
+
+        #instantiate parser object
+        activityParser = ActivityScoreParser()
+        activityParser.params = activityParser.build_additional_mapper_params(course.app_context)
+
+        mapper = models_utils.QueryMapper(
+            EventEntity.all().filter('user_id in', [student.user_id]), batch_size=500, report_every=1000)
+
+        def map_fn(activity_attempt):
+            activityParser.parse_activity_scores(activity_attempt)
+
+        mapper.run(map_fn)
+
+        activityParser.build_missing_scores()
+
+        return activityParser.activity_scores
+
+    QuestionAnswerInfo = collections.namedtuple(
+    'QuestionAnswerInfo',
+    ['unit_id',
+     'lesson_id',
+     'sequence',  # 0-based index of the question within the lesson/assessment.
+     'question_id',  # ID of the QuestionEntity to which this is an answer.
+     'question_type',  # McQuestion, SaQuestion, etc.
+     'timestamp',  # Timestamp from the event.
+     'answers',  # The answer (or answers, if multiple-answer multiple-choice).
+     'score',  # Unweighted score for the answer.
+     'weighted_score',  # Score fully weighted by question instance in HTML
+                        # or question usage in group and assessment (if in
+                        # assessment)
+     'tallied',  # Boolean: False for lessons where questions are not scored.
+     'possible_points',
+     'choices'
+    ])
+
+class ActivityScoreRestHandler(BaseRESTHandler):
+    """REST handler to manage retrieving activity scores.
+
+    Note:
+        Inherits from BaseRESTHandler.
+
+    Attributes:
+        SCHEMA_VERSIONS (int): Current version of REST handler
+        URL (str): Path to REST handler
+        XSRF_TOKEN (str): Token used for xsrf security functions.
+
+    """
+
+    XSRF_TOKEN = 'activity-scores-handler'
+    SCHEMA_VERSIONS = ['1']
+
+    URL = '/rest/modules/teacher_dashboard/activity_scores'
+
+    @classmethod
+    def get_schema(cls):
+        #TODO: implement a schema if necessary, not sure if needed since we aren't putting any data
+        pass
+
+    def get(self):
+        """Get activity scores."""
+        request = transforms.loads(self.request.get('request'))
+        payload = transforms.loads(request.get('payload'))
+        errors = []
+
+        students = payload['students']
+        course = self.get_course()
+
+        if students and len(students) > 0:
+            for user_id in students:
+                student = Student.get_student_by_user_id(user_id)
+                scores = ActivityScoreParser.get_activity_scores(student, course)
+        else:
+            errors.append('An error occurred retrieving activity scores. Contact your course administrator.')
+            self.validation_error('\n'.join(errors))
+            return
+
+        payload_dict = {
+            'scores': scores
+        }
+
+        transforms.send_json_response(
+            self, 200, '', payload_dict=payload_dict,
+            xsrf_token=crypto.XsrfTokenManager.create_xsrf_token(
+                self.XSRF_TOKEN))
 
 class StudentProgressRestHandler(BaseRESTHandler):
     """REST handler to manage retrieving student progress.
@@ -737,6 +967,12 @@ def notify_module_enabled():
         '/modules/teacher_dashboard/resources/js/popup.js')
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/course_section_analytics.js')
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/activity_score_manager.js')
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/student_list_table_manager.js')
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/student_list_table_rebuild_manager.js')
 
     dashboard.DashboardHandler.EXTRA_CSS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/css/student_list.css')
@@ -756,13 +992,17 @@ def register_module():
         (os.path.join(RESOURCES_PATH, 'js', '.*'), tags.JQueryHandler),
         (os.path.join(RESOURCES_PATH, '.*'), tags.ResourcesHandler),
         (RESOURCES_PATH + '/js/popup.js', tags.IifeHandler),
-        (RESOURCES_PATH + '/js/course_section_analytics.js', tags.IifeHandler)
+        (RESOURCES_PATH + '/js/course_section_analytics.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/activity_score_manager.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/student_list_table_manager.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/student_list_table_rebuild_manager.js', tags.IifeHandler)
        ]
 
     namespaced_routes = [
          (TeacherHandler.URL, TeacherHandler),
          (CourseSectionRestHandler.URL, CourseSectionRestHandler),
-         (StudentProgressRestHandler.URL, StudentProgressRestHandler)
+         (StudentProgressRestHandler.URL, StudentProgressRestHandler),
+         (ActivityScoreRestHandler.URL, ActivityScoreRestHandler)
         ]
 
     global custom_module  # pylint: disable=global-statement

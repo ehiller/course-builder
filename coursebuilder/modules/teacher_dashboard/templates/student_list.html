@@ -27,6 +27,7 @@
                 });
                 $.when(activityScoresLoaded).then(function() {
                     var test = 'test';
+                    window.scores = activityScores.getActivityScoresByStudentId();
                 });
             });
         {% endif %}
@@ -194,7 +195,10 @@
                                     </progress>
                                     &nbsp;
                                     <div class="student-completion-value">{{ student['course_completion'] }}%</div></td>
-                                <td class="student-lesson-completion">N/A</td>
+                                <td class="student-lesson-completion">
+                                    <span class="student-lesson-completion-percentage">N/A</span>
+                                    <span class="student-lesson-completion-score"></span>
+                                </td>
                                 <td style="display:none;"><input  class="student-id" type="hidden" value="{{ student['user_id'] }}" /></td>
                             </tr>
                         {% endfor %}

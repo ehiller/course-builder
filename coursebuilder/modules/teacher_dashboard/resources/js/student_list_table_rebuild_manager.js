@@ -9,6 +9,7 @@ function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
     $('.student-list-table > tbody > tr').each(function(index, value) {
         var completionValue;
         var lessonCompletionValue;
+        var lessonScore;
         var studentId = $(this).find('.student-id').val();
 
         if (unitId != 'course_completion') {
@@ -19,6 +20,7 @@ function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
                     for (var j = 0; j < unit_detail.lessons.length; j++) {
                         if (unit_detail.lessons[j].lesson_id == lessonId) {
                             lessonCompletionValue = ( unit_detail.lessons[j].completion / 2 ) * 100;
+                            lessonScore = calculateLessonScore(studentId, unitId, lessonId, window.scores);
                         }
                     }
                 }
@@ -36,12 +38,43 @@ function rebuildCompletionColumn(students, unitSelect, lessonSelect) {
         $(this).find('.student-completion-value').text(completionValue + '%');
 
         if (lessonCompletionValue == 'N/A') {
-            $(this).find('.student-lesson-completion').text(lessonCompletionValue);
+            $(this).find('.student-lesson-completion > .student-lesson-completion-percentage').text
+            (lessonCompletionValue);
         }
         else {
-            $(this).find('.student-lesson-completion').text(lessonCompletionValue + '%');
+            $(this).find('.student-lesson-completion > .student-lesson-completion-percentage').text(lessonCompletionValue + '%');
+            if (lessonScore) {
+                $(this).find('.student-lesson-completion > .student-lesson-completion-score').text(lessonScore.total +
+                '/' + lessonScore.possible);
+            }
         }
     });
+}
+
+/**
+ * function to calculate a students scores for a lesson
+ */
+function calculateLessonScore(studentId, unitId, lessonId, scores) {
+
+    studentScores = scores[studentId];
+    var lessonScore = {
+        possible: 0, total: 0
+    };
+
+    if (scores[studentId]) {
+        if (scores[studentId][unitId]) {
+            if (scores[studentId][unitId][lessonId]) {
+                questions = scores[studentId][unitId][lessonId];
+
+                $.each(questions, function (key, value) {
+                    lessonScore.total += value[8];
+                    lessonScore.possible += value[10];
+                });
+            }
+        }
+    }
+
+    return lessonScore;
 }
 
 /**

@@ -496,8 +496,10 @@ class ActivityScoreParser(jobs.MapReduceJob):
             #add score to right lesson
             question_info = questions[data['instanceid']]
             unit_answers = student_answers.get(question_info['unit'], {})
-            lesson_answers = unit_answers.get(question_info['lesson'], [])
-            lesson_answers.append(answers)
+            lesson_answers = unit_answers.get(question_info['lesson'], {})
+
+            for answer in answers:
+                lesson_answers[answer.sequence] = answer
 
             unit_answers[question_info['lesson']] = lesson_answers
             student_answers[question_info['unit']] = unit_answers
@@ -517,17 +519,15 @@ class ActivityScoreParser(jobs.MapReduceJob):
                 lesson_id = question['lesson']
 
                 question_answer = None
-                question_answer_index = 0
                 if unit_id in self.activity_scores[student_id] and lesson_id in \
                         self.activity_scores[student_id][unit_id]:
-                    for question_answer_info_list in self.activity_scores[student_id][unit_id][lesson_id]:
-                        question_answer = next((x for x in question_answer_info_list if x.sequence == question['sequence']), None)
-                        if question_answer:
-                            break
-                        else:
-                            question_answer_index += 1
+                    question_answer = next((x for x in self.activity_scores[student_id][unit_id][lesson_id].values()
+                                            if x.sequence == question['sequence']), None)
 
                 question_info = next((x for x in questions_info if x and x.id == question['id']), None)
+                if not question_info and question_answer:
+                    question_info = QuestionDAO.load(question_answer.question_id)
+
                 score = 0
                 choices = None
                 if question_info:
@@ -539,7 +539,8 @@ class ActivityScoreParser(jobs.MapReduceJob):
                         choices = question_info.dict['graders']
                         for grader in choices:
                             score += grader['score']
-                    score = score * question['weight']
+                    if 'weight' in question:
+                        score = score * question['weight']
                 else:
                     score = 1
 
@@ -548,24 +549,16 @@ class ActivityScoreParser(jobs.MapReduceJob):
                         unit_id, lesson_id, question['sequence'],
                         question['id'], 'NotCompleted',
                         0, '', 0, 0, False, score, choices)
-                    if unit_id in self.activity_scores[student_id] and lesson_id in \
-                            self.activity_scores[student_id][unit_id]:
-                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
-                    elif unit_id in self.activity_scores[student_id] and not lesson_id in \
-                            self.activity_scores[student_id][unit_id]:
-                        self.activity_scores[student_id][unit_id][lesson_id] = []
-                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
-                    else:
-                        self.activity_scores[student_id][unit_id] = {}
-                        self.activity_scores[student_id][unit_id][lesson_id] = []
-                        self.activity_scores[student_id][unit_id][lesson_id].append([question_answer])
+                    unit = self.activity_scores[student_id].get(unit_id, {})
+                    lesson = unit.get(lesson_id, {})
+                    lesson[question['sequence']] = question_answer
                 else:
                     question_answer = ActivityScoreParser.QuestionAnswerInfo(
                         question_answer.unit_id, question_answer.lesson_id, question_answer.sequence,
                         question_answer.question_id, question_answer.question_type,
                         question_answer.timestamp, question_answer.answers, question_answer.score,
                         question_answer.weighted_score, question_answer.tallied, score, choices)
-                    self.activity_scores[student_id][unit_id][lesson_id][question_answer_index][0] = question_answer
+                    self.activity_scores[student_id][unit_id][lesson_id][question['sequence']] = question_answer
 
     @classmethod
     def get_activity_scores(cls, student, course):
@@ -970,7 +963,7 @@ def notify_module_enabled():
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/activity_score_manager.js')
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
-        '/modules/teacher_dashboard/resources/js/student_list_table_manager.js')
+        '/modules/teacher_dashboard/resources/js/student_list_table_manager')
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/student_list_table_rebuild_manager.js')
 
@@ -994,7 +987,7 @@ def register_module():
         (RESOURCES_PATH + '/js/popup.js', tags.IifeHandler),
         (RESOURCES_PATH + '/js/course_section_analytics.js', tags.IifeHandler),
         (RESOURCES_PATH + '/js/activity_score_manager.js', tags.IifeHandler),
-        (RESOURCES_PATH + '/js/student_list_table_manager.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/student_list_table_manager', tags.IifeHandler),
         (RESOURCES_PATH + '/js/student_list_table_rebuild_manager.js', tags.IifeHandler)
        ]
 

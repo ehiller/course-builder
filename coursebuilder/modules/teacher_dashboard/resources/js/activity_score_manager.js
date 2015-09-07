@@ -73,6 +73,9 @@ ActivityScores.prototype = {
     $.each(activityScores, function(key, value) {
       that._activityScoresByStudentId[key] = value;
     });
+  },
+  getActivityScoresByStudentId: function () {
+    return this._activityScoresByStudentId;
   }
 }
 

@@ -66,13 +66,8 @@ ActivityScores.prototype = {
     }
   },
   _updateFromPayload: function(payload) {
-    var that = this;
     var activityScores = payload['scores'];
-
-    this._activityScoresByStudentId = [];
-    $.each(activityScores, function(key, value) {
-      that._activityScoresByStudentId[key] = value;
-    });
+    this._activityScoresByStudentId = activityScores;
   },
   getActivityScoresByStudentId: function () {
     return this._activityScoresByStudentId;

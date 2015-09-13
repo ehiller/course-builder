@@ -26,8 +26,8 @@
                     }, students);
                 });
                 $.when(activityScoresLoaded).then(function() {
-                    var test = 'test';
                     window.scores = activityScores.getActivityScoresByStudentId();
+                    RebuildCompletionColumn(window.students, $('.unit-select'), $('.lesson-select'));
                 });
             });
         {% endif %}
@@ -157,6 +157,13 @@
                 $('.lesson-select').change(function() {
                     //defined in popup.js
                     RebuildCompletionColumn(window.students, $('.unit-select'), this);
+                    var lessonScores = retrieveLessonScores(window.scores, $($('.unit-select')).val(), $(this).val());
+
+                    $('#questions-container').empty();
+
+                    var activityTable = new ActivityTable(lessonScores);
+                    activityTable.buildTable($($('.unit-select')).val(), $(this).val()).appendTo
+                    ('#questions-container');
                 });
             });
 
@@ -206,6 +213,8 @@
                 </tbody>
             </table>
         </div>
+
+        <div id="questions-container"></div>
 
         <div class="sl-footer" style="margin: 5px;">
             <a class="gcb-button gcb-pull-right"

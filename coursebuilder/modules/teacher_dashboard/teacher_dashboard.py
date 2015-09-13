@@ -40,6 +40,7 @@ from modules.dashboard import dashboard
 from modules.dashboard import tabs
 
 from models.models import QuestionDAO
+from models.models import QuestionGroupDAO
 
 #Setup paths and directories for templates and resources
 RESOURCES_PATH = '/modules/teacher_dashboard/resources'
@@ -453,9 +454,19 @@ class ActivityScoreParser(jobs.MapReduceJob):
 
     @classmethod
     def _get_questions_by_question_id(cls, questions_by_usage_id):
-        ret = []
+        ret = {}
+        ret['single'] = {}
+        ret['grouped'] = {}
         for question in questions_by_usage_id.values():
-            ret.append(QuestionDAO.load(question['id']))
+            question_single = QuestionDAO.load(question['id'])
+            if question_single:
+                ret['single'][question['id']] = question_single
+            else:
+                question_group = QuestionGroupDAO.load(question['id'])
+                if question_group:
+                    ret['grouped'][question['id']] = {}
+                    for item in question_group.items:
+                        ret['grouped'][question['id']][item['question']] = QuestionDAO.load(item['question'])
         return ret
 
     def build_additional_mapper_params(self, app_context):
@@ -508,6 +519,48 @@ class ActivityScoreParser(jobs.MapReduceJob):
 
         return self.activity_scores
 
+    def build_missing_score(self, question, question_info, student_id, unit_id, lesson_id, sequence=-1):
+        if sequence == -1:
+            sequence = question['sequence']
+
+        question_answer = None
+        if unit_id in self.activity_scores[student_id] and lesson_id in \
+                self.activity_scores[student_id][unit_id]:
+            question_answer = next((x for x in self.activity_scores[student_id][unit_id][lesson_id].values()
+                                    if x.sequence == sequence), None)
+
+        score = 0
+        choices = None
+        if question_info:
+            if 'choices' in question_info.dict:
+                choices = question_info.dict['choices']
+                for choice in choices:
+                    score += choice['score']
+            elif 'graders' in question_info.dict:
+                choices = question_info.dict['graders']
+                for grader in choices:
+                    score += grader['score']
+            if 'weight' in question:
+                score = score * question['weight']
+        else:
+            score = 1
+
+        if not question_answer:
+            question_answer = ActivityScoreParser.QuestionAnswerInfo(
+                unit_id, lesson_id, sequence,
+                question['id'], 'NotCompleted',
+                0, '', 0, 0, False, score, choices)
+            unit = self.activity_scores[student_id].get(unit_id, {})
+            lesson = unit.get(lesson_id, {})
+            lesson[sequence] = question_answer
+        else:
+            question_answer = ActivityScoreParser.QuestionAnswerInfo(
+                question_answer.unit_id, question_answer.lesson_id, question_answer.sequence,
+                question_answer.question_id, question_answer.question_type,
+                question_answer.timestamp, question_answer.answers, question_answer.score,
+                question_answer.weighted_score, question_answer.tallied, score, choices)
+            self.activity_scores[student_id][unit_id][lesson_id][sequence] = question_answer
+
     def build_missing_scores(self):
          #validate total points for lessons, need both question collections for score and weight
         total_scores = {}
@@ -518,47 +571,17 @@ class ActivityScoreParser(jobs.MapReduceJob):
                 unit_id = question['unit']
                 lesson_id = question['lesson']
 
-                question_answer = None
-                if unit_id in self.activity_scores[student_id] and lesson_id in \
-                        self.activity_scores[student_id][unit_id]:
-                    question_answer = next((x for x in self.activity_scores[student_id][unit_id][lesson_id].values()
-                                            if x.sequence == question['sequence']), None)
-
-                question_info = next((x for x in questions_info if x and x.id == question['id']), None)
-                if not question_info and question_answer:
-                    question_info = QuestionDAO.load(question_answer.question_id)
-
-                score = 0
-                choices = None
-                if question_info:
-                    if 'choices' in question_info.dict:
-                        choices = question_info.dict['choices']
-                        for choice in choices:
-                            score += choice['score']
-                    elif 'graders' in question_info.dict:
-                        choices = question_info.dict['graders']
-                        for grader in choices:
-                            score += grader['score']
-                    if 'weight' in question:
-                        score = score * question['weight']
+                question_info = questions_info['single'].get(question['id'], None) #next((x for x in questions_info if x
+                #  and
+                # x.id == question['id']), None)
+                if not question_info:
+                    question_info_group = questions_info['grouped'][question['id']]
+                    sequence = question['sequence']
+                    for question_info in question_info_group.values():
+                        self.build_missing_score(question, question_info, student_id, unit_id, lesson_id, sequence)
+                        sequence += 1
                 else:
-                    score = 1
-
-                if not question_answer:
-                    question_answer = ActivityScoreParser.QuestionAnswerInfo(
-                        unit_id, lesson_id, question['sequence'],
-                        question['id'], 'NotCompleted',
-                        0, '', 0, 0, False, score, choices)
-                    unit = self.activity_scores[student_id].get(unit_id, {})
-                    lesson = unit.get(lesson_id, {})
-                    lesson[question['sequence']] = question_answer
-                else:
-                    question_answer = ActivityScoreParser.QuestionAnswerInfo(
-                        question_answer.unit_id, question_answer.lesson_id, question_answer.sequence,
-                        question_answer.question_id, question_answer.question_type,
-                        question_answer.timestamp, question_answer.answers, question_answer.score,
-                        question_answer.weighted_score, question_answer.tallied, score, choices)
-                    self.activity_scores[student_id][unit_id][lesson_id][question['sequence']] = question_answer
+                    self.build_missing_score(question, question_info, student_id, unit_id, lesson_id)
 
     @classmethod
     def get_activity_scores(cls, student, course):
@@ -966,6 +989,8 @@ def notify_module_enabled():
         '/modules/teacher_dashboard/resources/js/student_list_table_manager')
     dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/js/student_list_table_rebuild_manager.js')
+    dashboard.DashboardHandler.EXTRA_JS_HREF_LIST.append(
+        '/modules/teacher_dashboard/resources/js/activity_score_table_manager.js')
 
     dashboard.DashboardHandler.EXTRA_CSS_HREF_LIST.append(
         '/modules/teacher_dashboard/resources/css/student_list.css')
@@ -988,7 +1013,8 @@ def register_module():
         (RESOURCES_PATH + '/js/course_section_analytics.js', tags.IifeHandler),
         (RESOURCES_PATH + '/js/activity_score_manager.js', tags.IifeHandler),
         (RESOURCES_PATH + '/js/student_list_table_manager', tags.IifeHandler),
-        (RESOURCES_PATH + '/js/student_list_table_rebuild_manager.js', tags.IifeHandler)
+        (RESOURCES_PATH + '/js/student_list_table_rebuild_manager.js', tags.IifeHandler),
+        (RESOURCES_PATH + '/js/activity_score_table_manager.js', tags.IifeHandler)
        ]
 
     namespaced_routes = [
